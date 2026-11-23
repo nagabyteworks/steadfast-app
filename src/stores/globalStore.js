@@ -2,6 +2,8 @@ import { ref, reactive } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
 
 export const BASE_URL = import.meta.env.VITE_BASE_URL
+export const productionAccount = ref(null)
+export const productionAccountError = ref('')
 export const showLTPRangeBar = ref(false)
 export const showToast = ref(false)
 export const toastMessage = ref('')
@@ -48,6 +50,7 @@ export const token = ref('')
 export const shoonyaOrderBook = ref([])
 export const shoonyaTradeBook = ref([])
 export const flatTradePositionBook = ref([])
+export const flattradePositionsStale = ref(true)
 export const shoonyaPositionBook = ref([])
 export const fundLimits = ref({})
 export const quantities = ref({

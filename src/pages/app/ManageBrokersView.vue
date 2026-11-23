@@ -1,7 +1,8 @@
 <script setup>
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, onUnmounted, ref, computed } from 'vue';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import { checkAllTokens } from '@/composables/useBrokerTokenValidator';
+import { isFlattradeAuthMessage } from '@/api/broker';
 
 // Formatters
 import { manageBrokerMaskClientId, maskTokenSecret } from '@/composables/useFormatters';
@@ -39,18 +40,25 @@ const {
   generateToken, // Flattrade Token Generation
   handleShoonyaLogin // Shoonya Token Generation
 } = useManageBroker()
+const isProduction = import.meta.env.PROD;
 
 import {
   copyToClipboard,
   getStatus,
 } from '@/composables/useTradeView'
 
+const handleBrokerMessage = (event) => {
+  if (isFlattradeAuthMessage(event)) {
+    flattradeReqCode.value = event.data.code;
+  }
+};
+
 onMounted(() => {
   // Populate brokerDetails from localStorage
   brokerDetails.value = getBrokersFromLocalStorage()
 
   // Retrieve broker details for each supported broker
-  for (const broker of supportedBrokers) {
+  for (const broker of (isProduction ? [] : supportedBrokers)) {
     if (broker === 'Flattrade') {
       const flattradeDetails = JSON.parse(localStorage.getItem('broker_Flattrade') || '{}');
       FLATTRADE_API_KEY.value = flattradeDetails.apiKey || '';
@@ -65,10 +73,7 @@ onMounted(() => {
     }
   }
 
-  const storedCode = localStorage.getItem('flattradeReqCode');
-  if (storedCode) {
-    flattradeReqCode.value = storedCode;
-  }
+  localStorage.removeItem('flattradeReqCode');
   statusMessage.value = localStorage.getItem('statusMessage') || '';
   // Clear any lingering status message after component mount
   if (statusMessage.value === 'Waiting for broker auth to complete...') {
@@ -78,15 +83,11 @@ onMounted(() => {
     }, 5000);
   }
   // Add event listener for postMessage
-  window.addEventListener('message', (event) => {
-    if (event.data.type === 'flattradeReqCode' && event.data.code) {
-      flattradeReqCode.value = event.data.code;
-      localStorage.setItem('flattradeReqCode', event.data.code); // Update local storage with new flattradeReqCode
-    }
-  });
+  window.addEventListener('message', handleBrokerMessage);
   checkAllTokens();
 });
 
+onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
 
 
 
@@ -97,7 +98,7 @@ onMounted(() => {
 
   <section class="row pt-5 pb-3">
     <div class="col-8 text-start">
-      <RouterLink to="/add-broker">
+      <RouterLink v-if="!isProduction" to="/add-broker">
         <button class="btn btn-outline btn-sm">Add New Broker</button>
       </RouterLink>
     </div>
@@ -113,12 +114,12 @@ onMounted(() => {
           <tr>
             <th scope="col">Broker</th>
             <th scope="col">Broker Client ID</th>
-            <th scope="col">API Key</th>
-            <th scope="col">API Token</th>
+            <th v-if="!isProduction" scope="col">API Key</th>
+            <th v-if="!isProduction" scope="col">API Token</th>
             <th scope="col">Validity</th>
             <th scope="col" class="text-center">Activation</th>
             <th scope="col">Status</th>
-            <th scope="col">Delete</th>
+            <th v-if="!isProduction" scope="col">Delete</th>
           </tr>
         </thead>
         <tbody>
@@ -135,8 +136,8 @@ onMounted(() => {
                 {{ visibleClientIds[broker.id] ? '👁️' : '👀' }}
               </button>
             </td>
-            <td>{{ maskTokenSecret(broker.apiKey) }}</td>
-            <td>
+            <td v-if="!isProduction">{{ maskTokenSecret(broker.apiKey) }}</td>
+            <td v-if="!isProduction">
               <div class="d-flex align-items-center">
                 <span>
                   {{ maskTokenSecret(broker.apiToken || '-') }}
@@ -166,7 +167,7 @@ onMounted(() => {
             <td>
               <span :class="`badge ${getStatus(broker).statusClass}`">{{ getStatus(broker).status }}</span>
             </td>
-            <td>
+            <td v-if="!isProduction">
               <button class="btn btn-outline-danger btn-sm" data-bs-toggle="modal"
                 data-bs-target="#DeleteBrokerConfirmationModal" @click="selectedBrokerToDelete = broker">
                 🗑️

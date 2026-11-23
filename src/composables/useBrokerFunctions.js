@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { validateToken } from '@/composables/useBrokerTokenValidator'
 import { updateSelectedBrokerOnServer } from '../api/broker'
 import axios from 'axios'
+import { logRequestError } from '@/api/requestError'
 import { parseBrokerKey, getAllBrokersFromLocalStorage } from '@/composables/useFormatters'
 
 // Global State
@@ -37,6 +38,10 @@ export const brokerStatus = computed(() => {
   const shoonyaClientId = shoonyaDetails?.clientId
 
   if (selectedBroker.value?.brokerName === 'Flattrade') {
+    if (import.meta.env.PROD) {
+      if (tokenStatus.Flattrade === 'valid') return 'Connected'
+      return tokenStatus.Flattrade === 'invalid' ? 'Token Expired' : 'Not Connected'
+    }
     if (flattradeClientId && flattradeApiToken) {
       return tokenStatus.Flattrade === 'valid' ? 'Connected' : 'Token Expired'
     }
@@ -62,11 +67,8 @@ export const updateSelectedBroker = async () => {
     selectedBrokerName.value &&
     availableBrokers.some((broker) => broker.brokerName === selectedBrokerName.value)
   ) {
-    const selectedBrokerKey = Object.keys(localStorage).find((key) =>
-      key.startsWith(`broker_${selectedBrokerName.value}_`)
-    )
-    if (selectedBrokerKey) {
-      const brokerDetails = JSON.parse(localStorage.getItem(selectedBrokerKey) || '{}')
+    const brokerDetails = availableBrokers.find((broker) => broker.brokerName === selectedBrokerName.value)
+    if (brokerDetails) {
       selectedBroker.value = brokerDetails
       localStorage.setItem('selectedBroker', JSON.stringify(brokerDetails))
       await updateSelectedBrokerOnServer(selectedBrokerName.value.toLowerCase())
@@ -110,6 +112,12 @@ export const setFlattradeCredentials = async () => {
       return
     }
 
+    if (import.meta.env.PROD) {
+      toastMessage.value = 'Flattrade session is managed by the server'
+      showToast.value = true
+      return
+    }
+
     const clientId = selectedBroker.value.clientId
     const apiToken = localStorage.getItem('FLATTRADE_API_TOKEN')
 
@@ -128,7 +136,7 @@ export const setFlattradeCredentials = async () => {
     toastMessage.value = 'Flattrade changes set successfully'
     showToast.value = true
   } catch (error) {
-    console.error('Error setting credentials :', error)
+    logRequestError('Error setting Flattrade credentials', error)
     toastMessage.value = 'Failed to set Flattrade credentials'
     showToast.value = true
   }
@@ -167,7 +175,7 @@ export const setShoonyaCredentials = async () => {
     toastMessage.value = 'Shoonya changes set successfully'
     showToast.value = true
   } catch (error) {
-    console.error('Error setting credentials: ', error)
+    logRequestError('Error setting Shoonya credentials', error)
     toastMessage.value = 'Failed to set Shoonya credentials'
     showToast.value = true
   }

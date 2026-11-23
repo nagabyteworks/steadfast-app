@@ -2,6 +2,7 @@
   <header></header>
 
   <main :class="['container', ['/steadfast', '/'].includes(currentRoute) ? 'bg-color-2' : 'bg-color']">
+    <p v-if="productionAccountError" class="alert alert-danger">{{ productionAccountError }}</p>
     <RouterView />
   </main>
 </template>
@@ -9,6 +10,7 @@
 <script>
 import { useRoute } from 'vue-router';
 import { computed } from 'vue';
+import { productionAccountError } from '@/stores/globalStore';
 
 export default {
   name: 'App',
@@ -17,7 +19,8 @@ export default {
     const currentRoute = computed(() => route.path);
 
     return {
-      currentRoute
+      currentRoute,
+      productionAccountError
     };
   },
   mounted() {

@@ -1,7 +1,13 @@
 import axios from 'axios'
-import { tokenStatus, supportedBrokers } from '@/stores/globalStore'
+import { logRequestError } from '@/api/requestError'
+import { BASE_URL, tokenStatus, supportedBrokers, productionAccount } from '@/stores/globalStore'
 
 const flattradeFundLimits = async () => {
+  if (import.meta.env.PROD) {
+    const res = await axios.post(`${BASE_URL}/flattrade/fundLimit`)
+    if (res.data?.stat !== 'Ok') throw new Error('Flattrade did not validate the session')
+    return res.data
+  }
   const jKey = localStorage.getItem('FLATTRADE_API_TOKEN')
 
   // Find the Flattrade broker details
@@ -23,7 +29,7 @@ const flattradeFundLimits = async () => {
   const payload = `jKey=${jKey}&jData=${jData}`
 
   try {
-    const res = await axios.post('https://piconnect.flattrade.in/PiConnectTP/Limits', payload, {
+    const res = await axios.post('https://piconnect.flattrade.in/PiConnectAPI/Limits', payload, {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       }
@@ -82,18 +88,22 @@ const validateToken = async (brokerName) => {
         throw new Error('Invalid broker name')
     }
   } catch (error) {
-    console.error(`Error validating token for ${brokerName}:`, error)
+    logRequestError(`Error validating token for ${brokerName}`, error)
     tokenStatus[brokerName] = 'invalid'
   }
 }
 
 const checkAllTokens = async () => {
-  for (const broker of supportedBrokers) {
+  for (const broker of (import.meta.env.PROD ? ['Flattrade'] : supportedBrokers)) {
     await validateToken(broker)
   }
 }
 
 const getBrokerStatus = (brokerName) => {
+  if (import.meta.env.PROD) {
+    if (brokerName !== 'Flattrade' || !productionAccount.value?.configured) return 'Broker not found'
+    return tokenStatus.Flattrade === 'unknown' ? 'Token missing' : tokenStatus.Flattrade
+  }
   // Find the broker details
   let brokerDetails = null
   let brokerToken = null

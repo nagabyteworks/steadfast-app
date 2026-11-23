@@ -636,6 +636,13 @@ export const activeTabFunction = {
   }
 }
 
+const fetchFunctions = {
+  fetchFlattradePositions,
+  fetchFlattradeOrdersTradesBook,
+  fetchShoonyaPositions,
+  fetchShoonyaOrdersTradesBook
+}
+
 // SetActive Tab Function
 export const setActiveFetchFunctionAndFetch = async () => {
   const brokerName = selectedBroker.value?.brokerName
@@ -646,7 +653,7 @@ export const setActiveFetchFunctionAndFetch = async () => {
     activeFetchFunction.value = functionName
 
     try {
-      await eval(functionName)()
+      await fetchFunctions[functionName]()
     } catch (error) {
       console.error(`Error fetching data for ${brokerName} ${tabType}:`, error)
       // Handle the error appropriately (e.g., show an error message to the user)

@@ -8,6 +8,12 @@
   <!-- Place Order Form -->
   <section class="row mt-2">
     <form @submit.prevent>
+      <div v-if="isProduction" class="alert alert-danger">
+        Trading and automated stoplosses/targets are disabled. Manage positions and protective orders directly with your broker.
+      </div>
+      <div v-if="selectedBroker?.brokerName === 'Flattrade' && flattradePositionsStale" class="alert alert-danger">
+        Position data is stale or unavailable. Verify current positions directly with your broker.
+      </div>
       <fieldset :disabled="isFormDisabled" :class="{ 'disabled-form': isFormDisabled }">
         <div class="row">
           <!-- Exchange Selection -->
@@ -637,6 +643,7 @@ import { onMounted, onBeforeUnmount } from 'vue';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import BrokerComponent from '@/components/BrokerComponent.vue';
 import { checkAllTokens } from '@/composables/useBrokerTokenValidator';
+import { updateSelectedBrokerOnServer } from '@/api/broker';
 import PositionsTableComponent from '@/components/PositionsTableComponent.vue';
 import OrdersNTradesComponent from '@/components/OrdersNTradesComponent.vue';
 import LtpRangeBarComponent from '@/components/LtpRangeBarComponent.vue';
@@ -677,7 +684,7 @@ import {
   putLowPrice,
   putClosePrice,
   reconnectTimeout,
-  wsConnectionState,
+  wsConnectionState, productionAccountError, flattradePositionsStale,
 } from '@/stores/globalStore'
 
 // Kill Switch Composables
@@ -752,6 +759,7 @@ import {
   totalCapitalPercentage,
 } from '@/composables/usePnlCalculations'
 
+const isProduction = import.meta.env.PROD;
 let timer;
 let positionCheckInterval;
 
@@ -765,8 +773,26 @@ onMounted(async () => {
   const storedBroker = localStorage.getItem('selectedBroker');
   if (storedBroker) {
     const brokerDetails = JSON.parse(storedBroker);
-    selectedBroker.value = brokerDetails;
-    selectedBrokerName.value = brokerDetails.brokerName;
+    const availableBroker = isProduction
+      ? availableBrokers.value.find((broker) =>
+        broker.brokerName === brokerDetails.brokerName && broker.clientId === brokerDetails.clientId)
+      : brokerDetails;
+    if (availableBroker) {
+      selectedBroker.value = availableBroker;
+      selectedBrokerName.value = availableBroker.brokerName;
+      if (isProduction && brokerStatus.value === 'Connected') {
+        try {
+          await updateSelectedBrokerOnServer(availableBroker.brokerName.toLowerCase());
+        } catch (error) {
+          productionAccountError.value = 'Unable to start the broker stream. Check the service and reload.'
+          console.error('Unable to start the broker stream:', error.message);
+        }
+      }
+    } else {
+      selectedBroker.value = null;
+      selectedBrokerName.value = '';
+      localStorage.removeItem('selectedBroker');
+    }
   }
 
   // Load cached trading data

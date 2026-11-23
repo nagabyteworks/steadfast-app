@@ -1,11 +1,22 @@
 import { fileURLToPath, URL } from 'node:url'
 
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  const isProduction = mode === 'production'
+  if (mode === 'production') {
+    const baseUrl = loadEnv(mode, process.cwd(), 'VITE_').VITE_BASE_URL
+    let url
+    try {
+      url = new URL(baseUrl)
+    } catch {
+      throw new Error('VITE_BASE_URL must be an absolute HTTPS origin in production')
+    }
+    if (url.protocol !== 'https:' || url.href !== `${url.origin}/`) {
+      throw new Error('VITE_BASE_URL must be an absolute HTTPS origin in production')
+    }
+  }
 
   return {
     base: '/',
@@ -18,27 +29,27 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         '/flattradeSymbols': {
-          target: isProduction ? 'https://api.steadfastapp.in' : 'http://localhost:3000',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/flattradeSymbols/, '/flattrade/')
         },
         '/shoonyaSymbols': {
-          target: isProduction ? 'https://api.steadfastapp.in' : 'http://localhost:3000',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/shoonyaSymbols/, '/shoonya/')
         },
         '/flattradeApi': {
-          target: 'https://authapi.flattrade.in',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/flattradeApi/, '')
+          rewrite: (path) => path.replace(/^\/flattradeApi/, '/flattrade/flattradeApi')
         },
         '/shoonyaApi': {
-          target: 'https://api.shoonya.com',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/shoonyaApi/, '')
+          rewrite: (path) => path.replace(/^\/shoonyaApi/, '/shoonya/shoonyaApi')
         },
         '/api': {
-          target: isProduction ? 'https://api.steadfastapp.in' : 'http://localhost:3000',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, '')
         }
@@ -46,11 +57,6 @@ export default defineConfig(({ mode }) => {
     },
     optimizeDeps: {
       include: ['@google/generative-ai']
-    },
-    define: {
-      'process.env.BASE_URL': isProduction
-        ? JSON.stringify('https://api.steadfastapp.in')
-        : JSON.stringify('http://localhost:3000')
     }
   }
 })

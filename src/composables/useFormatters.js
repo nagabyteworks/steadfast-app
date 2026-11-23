@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { dataFetched, selectedBroker } from '@/stores/globalStore'
+import { dataFetched, selectedBroker, productionAccount } from '@/stores/globalStore'
 
 // Broker Formatter
 // Parse broker key
@@ -18,6 +18,8 @@ export const getAllBrokersFromLocalStorage = () => {
       const brokerData = JSON.parse(localStorage.getItem(key))
       return { ...brokerData, brokerName, clientId }
     })
+    .filter((broker) => !import.meta.env.PROD ||
+      (broker.brokerName === 'Flattrade' && broker.clientId === productionAccount.value?.clientId))
 }
 
 // Trading Symbol Formatter

@@ -17,6 +17,7 @@ import {
 } from '@/stores/globalStore'
 
 import { validateToken } from '@/composables/useBrokerTokenValidator'
+import { getAllBrokersFromLocalStorage } from '@/composables/useFormatters'
 
 export function useManageBroker() {
   // Track visibility for each broker's client ID
@@ -28,6 +29,12 @@ export function useManageBroker() {
   }
 
   const getBrokersFromLocalStorage = () => {
+    if (import.meta.env.PROD) {
+      return getAllBrokersFromLocalStorage().map((broker) => ({
+        ...broker,
+        id: broker.clientId
+      }))
+    }
     const brokers = []
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
@@ -72,6 +79,14 @@ export function useManageBroker() {
     statusMessage.value = 'Waiting for broker auth to complete...'
     localStorage.setItem('statusMessage', statusMessage.value)
 
+    if (import.meta.env.PROD) {
+      if (!window.open(`${BASE_URL}/flattrade/auth`, '_blank')) {
+        errorMessage.value = 'Unable to open the broker login window. Check your popup settings.'
+        clearErrorMessage()
+      }
+      return
+    }
+
     let flattradeDetails = null
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
@@ -100,7 +115,26 @@ export function useManageBroker() {
 
   watch(flattradeReqCode, async (newCode) => {
     if (newCode && userTriggeredTokenGeneration.value) {
-      statusMessage.value = `Received flattradeReqCode: ${newCode}`
+      statusMessage.value = 'Received Flattrade authorization code'
+
+      if (import.meta.env.PROD) {
+        try {
+          await axios.post(`${BASE_URL}/flattrade/generateToken`, { request_code: newCode })
+          await validateToken('Flattrade')
+          statusMessage.value = 'Broker session created on the server. Streaming may take a moment.'
+          errorMessage.value = ''
+        } catch (error) {
+          errorMessage.value = error.response?.data?.message || 'Error creating the broker session'
+          statusMessage.value = ''
+          console.error('Error creating the broker session:', error.message)
+          clearErrorMessage()
+        } finally {
+          flattradeReqCode.value = ''
+          userTriggeredTokenGeneration.value = false
+          localStorage.removeItem('statusMessage')
+        }
+        return
+      }
 
       // Find the Flattrade broker details
       let flattradeDetails = null
@@ -148,9 +182,8 @@ export function useManageBroker() {
         } else {
           FLATTRADE_API_TOKEN.value = token
           errorMessage.value = ''
-          statusMessage.value = `Token generated successfully: ${token}`
+          statusMessage.value = 'Token generated successfully'
           localStorage.removeItem('statusMessage') // Clear the stored status message
-          console.log('Token generated successfully:', token)
 
           // Clear success message after 5 seconds
           setTimeout(() => {
@@ -160,13 +193,14 @@ export function useManageBroker() {
       } catch (error) {
         errorMessage.value = 'Error generating token: ' + error.message
         clearErrorMessage()
-        console.error('Error generating token:', error)
+        console.error('Error generating token:', error.message)
       }
     }
   })
 
   // Watch for changes in FLATTRADE_API_TOKEN and update localStorage
   watch(FLATTRADE_API_TOKEN, (newToken) => {
+    if (import.meta.env.PROD) return
     if (newToken) {
       localStorage.setItem('FLATTRADE_API_TOKEN', newToken)
       validateToken('Flattrade')

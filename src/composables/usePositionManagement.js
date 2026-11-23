@@ -1,9 +1,11 @@
 import { selectedBroker } from '@/stores/globalStore'
 import axios from 'axios'
+import { logRequestError } from '@/api/requestError'
 
 import {
   BASE_URL,
   flatTradePositionBook,
+  flattradePositionsStale,
   shoonyaPositionBook,
   positionSecurityIds,
   socket,
@@ -42,12 +44,12 @@ export const fetchFundLimit = async () => {
 
     let response
     if (selectedBroker.value?.brokerName === 'Flattrade') {
-      const FLATTRADE_API_TOKEN = localStorage.getItem('FLATTRADE_API_TOKEN')
-      if (!FLATTRADE_API_TOKEN) {
+      const FLATTRADE_API_TOKEN = import.meta.env.PROD ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
+      if (!import.meta.env.PROD && !FLATTRADE_API_TOKEN) {
         throw new Error('Flattrade API Token is missing')
       }
       response = await axios.post(`${BASE_URL}/flattrade/fundLimit`, null, {
-        params: {
+        params: import.meta.env.PROD ? {} : {
           FLATTRADE_API_TOKEN,
           FLATTRADE_CLIENT_ID: selectedBroker.value.clientId
         }
@@ -80,12 +82,12 @@ export const fetchFundLimit = async () => {
     }
     // fundLimits.value = response.data;
   } catch (error) {
-    console.error('Failed to fetch fund limits:', error)
+    logRequestError('Failed to fetch fund limits', error)
   }
 }
 
 export const fetchFlattradeOrdersTradesBook = async () => {
-  let jKey = localStorage.getItem('FLATTRADE_API_TOKEN') || token.value
+  const jKey = import.meta.env.PROD ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
 
   if (!selectedBroker.value || selectedBroker.value?.brokerName !== 'Flattrade') {
     toastMessage.value = 'Flattrade broker is not selected.'
@@ -95,7 +97,7 @@ export const fetchFlattradeOrdersTradesBook = async () => {
 
   const clientId = selectedBroker.value.clientId
 
-  if (!jKey || !clientId) {
+  if ((!import.meta.env.PROD && !jKey) || !clientId) {
     toastMessage.value = 'Token or Client ID is missing. Please generate a token first.'
     showToast.value = true
     return
@@ -103,7 +105,7 @@ export const fetchFlattradeOrdersTradesBook = async () => {
 
   try {
     const response = await axios.get(`${BASE_URL}/flattrade/getOrdersAndTrades`, {
-      params: {
+      params: import.meta.env.PROD ? {} : {
         FLATTRADE_API_TOKEN: jKey,
         FLATTRADE_CLIENT_ID: clientId
       }
@@ -116,7 +118,7 @@ export const fetchFlattradeOrdersTradesBook = async () => {
   } catch (error) {
     toastMessage.value = 'Error fetching trades: ' + error.message
     showToast.value = true
-    console.error('Error fetching trades:', error)
+    logRequestError('Error fetching trades', error)
   }
 }
 export const fetchShoonyaOrdersTradesBook = async () => {
@@ -151,7 +153,7 @@ export const fetchShoonyaOrdersTradesBook = async () => {
   } catch (error) {
     toastMessage.value = 'Error fetching trades: ' + error.message
     showToast.value = true
-    console.error('Error fetching trades:', error)
+    logRequestError('Error fetching trades', error)
   }
 }
 export const updatePositionSecurityIds = () => {
@@ -168,9 +170,9 @@ export const updatePositionSecurityIds = () => {
   })
 }
 export const fetchFlattradePositions = async () => {
-  let jKey = localStorage.getItem('FLATTRADE_API_TOKEN') || token.value
+  const jKey = import.meta.env.PROD ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
 
-  if (!jKey) {
+  if (!import.meta.env.PROD && !jKey) {
     toastMessage.value = 'Token is missing. Please generate a token first.'
     showToast.value = true
     return
@@ -187,39 +189,35 @@ export const fetchFlattradePositions = async () => {
   const positionBookPayload = `jKey=${jKey}&jData=${JSON.stringify({ uid: clientId, actid: clientId })}`
 
   try {
-    const positionBookRes = await axios.post(
-      'https://piconnect.flattrade.in/PiConnectTP/PositionBook',
-      positionBookPayload,
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      }
-    )
+    const positionBookRes = import.meta.env.PROD
+      ? await axios.get(`${BASE_URL}/flattrade/positions`)
+      : await axios.post('https://piconnect.flattrade.in/PiConnectAPI/PositionBook', positionBookPayload, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      })
 
     if (
       Array.isArray(positionBookRes.data) &&
       positionBookRes.data.every((item) => item.stat === 'Ok')
     ) {
       flatTradePositionBook.value = positionBookRes.data
+      flattradePositionsStale.value = false
       // console.log('Flattrade Position Book:', positionBookRes.data);
       updatePositionSecurityIds()
       subscribeToPositionLTPs()
       subscribeToOptions()
     } else if (
-      positionBookRes.data.emsg === 'no data' ||
-      positionBookRes.data.emsg.includes('no data')
+      positionBookRes.data?.emsg?.trim().toLowerCase() === 'no data'
     ) {
       flatTradePositionBook.value = []
+      flattradePositionsStale.value = false
       // console.log('No positions in Flattrade Position Book');
     } else {
-      const errorMsg = positionBookRes.data.emsg || 'Unknown error'
-      console.error('Error fetching position book:', errorMsg)
-      flatTradePositionBook.value = []
+      console.error('Flattrade rejected the position book request')
+      flattradePositionsStale.value = true
     }
   } catch (error) {
-    console.error('Error fetching position book:', error)
-    flatTradePositionBook.value = []
+    logRequestError('Error fetching position book', error)
+    flattradePositionsStale.value = true
   }
 }
 export const fetchShoonyaPositions = async () => {
@@ -273,7 +271,7 @@ export const fetchShoonyaPositions = async () => {
       shoonyaPositionBook.value = []
     }
   } catch (error) {
-    console.error('Error fetching position book:', error)
+    logRequestError('Error fetching position book', error)
     shoonyaPositionBook.value = []
   }
 }

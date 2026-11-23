@@ -18,6 +18,11 @@ import {
 import { placeOrderForPosition } from '@/composables/useOrderManagement'
 
 export const setStoploss = (position, type) => {
+  if (import.meta.env.PROD) {
+    toastMessage.value = 'Stoploss automation is unavailable. Manage protection with your broker.'
+    showToast.value = true
+    return
+  }
   if (!enableStoploss.value) {
     console.log('Stoploss is disabled.')
     return
@@ -106,6 +111,11 @@ export const decreaseStoploss = (position) => {
   }
 }
 export const setTarget = (position) => {
+  if (import.meta.env.PROD) {
+    toastMessage.value = 'Target automation is unavailable. Manage positions with your broker.'
+    showToast.value = true
+    return
+  }
   if (!enableTarget.value) {
     console.log('Target is disabled.')
     return
@@ -271,6 +281,7 @@ export const checkStoplosses = () => {
   }
 }
 export const checkStoplossesAndTargets = () => {
+  if (import.meta.env.PROD) return
   checkStoplosses()
   checkTargets()
 }

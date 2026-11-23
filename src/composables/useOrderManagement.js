@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import axios from 'axios'
 import qs from 'qs'
+import { logRequestError } from '@/api/requestError'
 
 // Global State
 import {
@@ -135,11 +136,11 @@ export const placeOrder = async (transactionType, drvOptionType) => {
 
       let response
       if (selectedBroker.value?.brokerName === 'Flattrade') {
-        const FLATTRADE_API_TOKEN = localStorage.getItem('FLATTRADE_API_TOKEN')
+        const FLATTRADE_API_TOKEN = import.meta.env.PROD ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
         const payload = qs.stringify(orderData)
         response = await axios.post(`${BASE_URL}/flattrade/placeOrder`, payload, {
           headers: {
-            Authorization: `Bearer ${FLATTRADE_API_TOKEN}`,
+            ...(!import.meta.env.PROD && { Authorization: `Bearer ${FLATTRADE_API_TOKEN}` }),
             'Content-Type': 'application/x-www-form-urlencoded'
           }
         })
@@ -154,8 +155,10 @@ export const placeOrder = async (transactionType, drvOptionType) => {
         })
       }
 
+      if (response?.data?.stat !== 'Ok' || !response.data.norenordno) {
+        throw new Error('Broker did not acknowledge the order')
+      }
       console.log(`Placed order for ${lotsToPlace} lots (${quantityToPlace} quantity)`)
-      console.log('Order placed successfully:', response.data)
       remainingLots -= lotsToPlace
       placedLots += lotsToPlace
 
@@ -193,7 +196,7 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     // Update fund limits
     await updateFundLimits()
   } catch (error) {
-    console.error('Error placing order:', error)
+    logRequestError('Error placing order', error)
     if (error.response?.data?.message) {
       const firstThreeWords = error.response.data.message.split(' ').slice(0, 3).join(' ')
       toastMessage.value = firstThreeWords
@@ -241,11 +244,11 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
 
       let response
       if (selectedBroker.value?.brokerName === 'Flattrade') {
-        const FLATTRADE_API_TOKEN = localStorage.getItem('FLATTRADE_API_TOKEN')
+        const FLATTRADE_API_TOKEN = import.meta.env.PROD ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
         const payload = qs.stringify(orderData)
         response = await axios.post(`${BASE_URL}/flattrade/placeOrder`, payload, {
           headers: {
-            Authorization: `Bearer ${FLATTRADE_API_TOKEN}`,
+            ...(!import.meta.env.PROD && { Authorization: `Bearer ${FLATTRADE_API_TOKEN}` }),
             'Content-Type': 'application/x-www-form-urlencoded'
           }
         })
@@ -260,6 +263,9 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
         })
       }
 
+      if (response?.data?.stat !== 'Ok' || !response.data.norenordno) {
+        throw new Error('Broker did not acknowledge the close order')
+      }
       console.log(`Placed order for ${quantityToPlace} quantity`)
 
       remainingQuantity -= quantityToPlace
@@ -267,7 +273,7 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
     }
 
     console.log(`All orders placed successfully. Total: ${placedQuantity} quantity`)
-    toastMessage.value = `Order(s) placed successfully for ${getSymbol(position)}`
+    toastMessage.value = `Close order(s) submitted for ${getSymbol(position)}. Verify fills with your broker.`
     showToast.value = true
 
     // Add a delay before fetching updated data
@@ -278,10 +284,12 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
 
     // Update fund limits
     await updateFundLimits()
+    return true
   } catch (error) {
-    console.error('Failed to place order for position:', error)
+    logRequestError('Failed to place order for position', error)
     toastMessage.value = 'Failed to place order for SL/Target'
     showToast.value = true
+    return false
   }
 }
 export const closeAllPositions = async () => {
@@ -297,7 +305,9 @@ export const closeAllPositions = async () => {
         if (netqty !== 0) {
           const transactionType = netqty > 0 ? 'S' : 'B'
           const optionType = position.tsym.includes('C') ? 'CALL' : 'PUT'
-          await placeOrderForPosition(transactionType, optionType, position)
+          if (!await placeOrderForPosition(transactionType, optionType, position)) {
+            throw new Error('Close order was not acknowledged')
+          }
           positionsClosed = true
         }
       }
@@ -310,7 +320,9 @@ export const closeAllPositions = async () => {
         if (netqty !== 0) {
           const transactionType = netqty > 0 ? 'S' : 'B'
           const optionType = position.tsym.includes('C') ? 'CALL' : 'PUT'
-          await placeOrderForPosition(transactionType, optionType, position)
+          if (!await placeOrderForPosition(transactionType, optionType, position)) {
+            throw new Error('Close order was not acknowledged')
+          }
           positionsClosed = true
         }
       }
@@ -326,13 +338,13 @@ export const closeAllPositions = async () => {
     await updateFundLimits()
 
     if (positionsClosed) {
-      toastMessage.value = `All ${selectedBroker.value?.brokerName} positions closed successfully`
+      toastMessage.value = 'Close orders submitted. Verify fills with your broker.'
     } else {
       toastMessage.value = `No positions to close for ${selectedBroker.value?.brokerName}`
     }
     showToast.value = true
   } catch (error) {
-    console.error('Error closing positions:', error)
+    logRequestError('Error closing positions', error)
     toastMessage.value = 'Failed to close all positions'
     showToast.value = true
   }
@@ -350,18 +362,19 @@ export const cancelOrder = async (order) => {
   }
 
   try {
+    let response
     if (selectedBroker.value?.brokerName === 'Flattrade') {
-      const jKey = localStorage.getItem('FLATTRADE_API_TOKEN') || token.value
+      const jKey = import.meta.env.PROD ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
       const clientId = selectedBroker.value.clientId
       console.log(`Sending request to cancel Flattrade order ${orderId}`)
-      await axios.post(
+      response = await axios.post(
         `${BASE_URL}/flattrade/cancelOrder`,
         {
           norenordno: orderId,
           uid: clientId
         },
         {
-          params: {
+          params: import.meta.env.PROD ? {} : {
             FLATTRADE_API_TOKEN: jKey
           }
         }
@@ -370,7 +383,7 @@ export const cancelOrder = async (order) => {
       const jKey = localStorage.getItem('SHOONYA_API_TOKEN') || token.value
       const clientId = selectedBroker.value.clientId
       console.log(`Sending request to cancel Shoonya order ${orderId}`)
-      await axios.post(
+      response = await axios.post(
         `${BASE_URL}/shoonya/cancelOrder`,
         {
           norenordno: orderId,
@@ -383,11 +396,14 @@ export const cancelOrder = async (order) => {
         }
       )
     }
-    console.log(`Order ${orderId} canceled successfully.`)
+    if (response?.data?.stat !== 'Ok' || !response.data.result) {
+      throw new Error('Broker did not acknowledge the cancellation')
+    }
+    console.log(`Cancellation request acknowledged for order ${orderId}.`)
     // Update fund limits
     await updateFundLimits()
   } catch (error) {
-    console.error(`Failed to cancel order ${orderId}:`, error)
+    logRequestError(`Failed to cancel order ${orderId}`, error)
     toastMessage.value = 'Failed to cancel order'
     showToast.value = true
     throw error // Rethrow to handle in cancelPendingOrders
@@ -413,11 +429,10 @@ export const cancelPendingOrders = async () => {
 
   const cancelPromises = pendingOrders.map((order) => cancelOrder(order))
   console.log(`Canceling pending orders for broker: ${selectedBroker.value?.brokerName}`) // placed here to prevent delay and debugging if required
-  console.log(`Pending orders:`, pendingOrders) // placed here to prevent delay and debugging if required
 
   try {
     await Promise.all(cancelPromises)
-    toastMessage.value = 'Pending orders canceled successfully'
+    toastMessage.value = 'Cancellation requests submitted. Verify order status with your broker.'
     showToast.value = true
 
     // Refresh the orders list based on the selected broker
@@ -427,7 +442,7 @@ export const cancelPendingOrders = async () => {
       await fetchShoonyaOrdersTradesBook()
     }
   } catch (error) {
-    console.error('Failed to cancel orders:', error)
+    logRequestError('Failed to cancel orders', error)
     toastMessage.value = 'Failed to cancel some orders'
     showToast.value = true
   }
@@ -446,7 +461,9 @@ export const closeSelectedPositions = async () => {
         if (netqty !== 0) {
           const transactionType = netqty > 0 ? 'S' : 'B'
           const optionType = position.tsym.includes('C') ? 'CALL' : 'PUT'
-          await placeOrderForPosition(transactionType, optionType, position)
+          if (!await placeOrderForPosition(transactionType, optionType, position)) {
+            throw new Error('Close order was not acknowledged')
+          }
           positionsClosed = true
 
           // Remove the closed position from the selected positions
@@ -463,7 +480,9 @@ export const closeSelectedPositions = async () => {
         if (netqty !== 0) {
           const transactionType = netqty > 0 ? 'S' : 'B'
           const optionType = position.tsym.includes('C') ? 'CALL' : 'PUT'
-          await placeOrderForPosition(transactionType, optionType, position)
+          if (!await placeOrderForPosition(transactionType, optionType, position)) {
+            throw new Error('Close order was not acknowledged')
+          }
           positionsClosed = true
 
           // Remove the closed position from the selected positions
@@ -482,13 +501,13 @@ export const closeSelectedPositions = async () => {
     await updateFundLimits()
 
     if (positionsClosed) {
-      toastMessage.value = `Selected positions closed successfully`
+      toastMessage.value = 'Close orders submitted. Verify fills with your broker.'
     } else {
       toastMessage.value = `No positions to close`
     }
     showToast.value = true
   } catch (error) {
-    console.error('Error closing selected positions:', error)
+    logRequestError('Error closing selected positions', error)
     toastMessage.value = 'Failed to close selected positions'
     showToast.value = true
   }

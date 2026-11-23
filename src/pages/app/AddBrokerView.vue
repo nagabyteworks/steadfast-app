@@ -16,7 +16,10 @@
         <h3>Add broker API Details 🔐</h3>
         <p>Please watch the YouTube video on how to obtain the following details.</p>
         <!-- Select Broker -->
-        <form @submit.prevent="addBroker">
+        <p v-if="isProduction" class="alert alert-info">
+          Configure the Flattrade account on the server. Shoonya is unavailable in production.
+        </p>
+        <form v-else @submit.prevent="addBroker">
           <label for="SelectBroker" class="mt-3 form-label mb-0"><b>Select Broker</b></label>
           <select v-model="selectedBroker" class="form-select" aria-label="Select Broker">
             <option value="">Select a broker</option>
@@ -76,6 +79,7 @@ import { useRouter } from 'vue-router';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import { supportedBrokers } from '@/stores/globalStore';
 const router = useRouter();
+const isProduction = import.meta.env.PROD;
 const redirectURL = computed(() => {
   const baseUrl = import.meta.env.DEV ? 'http://localhost:5173' : import.meta.env.VITE_BASE_URL;
   return `${baseUrl}/${selectedBroker.value.toLowerCase()}/redirect?`;
@@ -109,6 +113,7 @@ const openBrokerDashboard = () => {
 };
 
 const addBroker = () => {
+  if (isProduction) return;
   const brokerDetails = {
     brokerName: selectedBroker.value,
     clientId: clientId.value,
