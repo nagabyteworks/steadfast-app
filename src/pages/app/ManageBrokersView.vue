@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref, computed } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import { checkAllTokens } from '@/composables/useBrokerTokenValidator';
 import { isFlattradeAuthMessage } from '@/api/broker';
@@ -187,7 +187,14 @@ onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
   </section>
 
   <!-- Shoonya Login -->
-  <div class="modal fade" id="ShoonyaLogin" tabindex="-1" aria-labelledby="ShoonyaLoginLabel" aria-hidden="true">
+  <div
+    v-if="!isProduction"
+    class="modal fade"
+    id="ShoonyaLogin"
+    tabindex="-1"
+    aria-labelledby="ShoonyaLoginLabel"
+    aria-hidden="true"
+  >
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <form @submit.prevent="handleShoonyaLogin" class="">
@@ -233,7 +240,14 @@ onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
   </div>
 
   <!-- Update Token -->
-  <div class="modal fade" id="UpdateToken" tabindex="-1" aria-labelledby="UpdateTokenLabel" aria-hidden="true">
+  <div
+    v-if="!isProduction"
+    class="modal fade"
+    id="UpdateToken"
+    tabindex="-1"
+    aria-labelledby="UpdateTokenLabel"
+    aria-hidden="true"
+  >
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
@@ -261,8 +275,14 @@ onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
   </div>
 
   <!-- Delete Broker Confirmation Modal -->
-  <div class="modal fade" id="DeleteBrokerConfirmationModal" tabindex="-1"
-    aria-labelledby="DeleteBrokerConfirmationModalLabel" aria-hidden="true">
+  <div
+    v-if="!isProduction"
+    class="modal fade"
+    id="DeleteBrokerConfirmationModal"
+    tabindex="-1"
+    aria-labelledby="DeleteBrokerConfirmationModalLabel"
+    aria-hidden="true"
+  >
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
@@ -285,5 +305,4 @@ onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
       </div>
     </div>
   </div>
-
 </template>

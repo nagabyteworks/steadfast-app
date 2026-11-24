@@ -20,7 +20,6 @@ import {
   socket,
   defaultCallSecurityId,
   defaultPutSecurityId,
-  currentSubscriptions,
   fundLimits,
   selectedExchange,
   positionLTPs,
@@ -90,7 +89,6 @@ import {
   reconnectAttempts,
   reconnectTimeout,
   wsConnectionState,
-  messageQueue,
   stoplossValue,
   targetValue
 } from '@/stores/globalStore'
@@ -154,9 +152,7 @@ import {
 // WebSocket Composables
 import {
   subscribeToMasterSymbol,
-  subscribeToOptions,
-  unsubscribeFromSymbols,
-  subscribeToPositionLTPs
+  subscribeToOptions
 } from '@/composables/useWebSocket'
 
 import { setDefaultExpiry } from '@/composables/useAppSettings'
@@ -494,44 +490,8 @@ export const updateTradingSymbol = (strike) => {
 
 // WebSocket
 export const updateSubscriptions = () => {
-  const symbolsToUnsubscribe = []
-
-  // Check if master symbol has changed
-  if (currentSubscriptions.value.masterSymbol !== selectedMasterSymbol.value) {
-    if (currentSubscriptions.value.masterSymbol) {
-      const oldSymbolInfo =
-        exchangeSymbols.value.symbolData[currentSubscriptions.value.masterSymbol]
-      if (oldSymbolInfo) {
-        symbolsToUnsubscribe.push(
-          `${oldSymbolInfo.exchangeCode}|${oldSymbolInfo.exchangeSecurityId}`
-        )
-      }
-    }
-  }
-
-  // Check if options have changed
-  if (
-    currentSubscriptions.value.callOption &&
-    currentSubscriptions.value.callOption !== defaultCallSecurityId.value
-  ) {
-    symbolsToUnsubscribe.push(`NFO|${currentSubscriptions.value.callOption}`)
-  }
-  if (
-    currentSubscriptions.value.putOption &&
-    currentSubscriptions.value.putOption !== defaultPutSecurityId.value
-  ) {
-    symbolsToUnsubscribe.push(`NFO|${currentSubscriptions.value.putOption}`)
-  }
-
-  // Unsubscribe from old symbols
-  if (symbolsToUnsubscribe.length > 0) {
-    unsubscribeFromSymbols(symbolsToUnsubscribe)
-  }
-
-  // Subscribe to new symbols
   subscribeToMasterSymbol()
   subscribeToOptions()
-  subscribeToPositionLTPs()
 }
 
 export const debouncedUpdateSubscriptions = debounce(updateSubscriptions, 300)

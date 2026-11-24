@@ -51,6 +51,7 @@ export const shoonyaOrderBook = ref([])
 export const shoonyaTradeBook = ref([])
 export const flatTradePositionBook = ref([])
 export const flattradePositionsStale = ref(true)
+export const flattradePositionsLastUpdatedAt = ref(null)
 export const shoonyaPositionBook = ref([])
 export const fundLimits = ref({})
 export const quantities = ref({
@@ -73,6 +74,16 @@ export const positionsInExecution = ref({})
 export const clockEmojis = ['🕛', '🕐', '🕑', '🕒', '🕓', '🕔', '🕕', '🕖', '🕗', '🕘', '🕙', '🕚']
 export const currentClockEmoji = ref(clockEmojis[new Date().getHours() % clockEmojis.length])
 export const socket = ref(null)
+export const lastMarketDataAt = ref(null)
+export const brokerStreamHealth = ref({
+  authenticated: false,
+  connectionState: 'unknown',
+  localListener: false,
+  lastTickAt: null,
+  lastError: null,
+  retryAttempt: 0,
+  updatedAt: null
+})
 export const latestCallLTP = ref('N/A')
 export const latestPutLTP = ref('N/A')
 export const defaultCallSecurityId = ref(null)
@@ -166,8 +177,11 @@ export const userId = localStorage.getItem('userId')
 export const selectedOrderType = ref('MKT')
 export const currentSubscriptions = ref({
   masterSymbol: null,
+  masterSymbolExchangeCode: null,
+  masterSymbolSecurityId: null,
   callOption: null,
-  putOption: null
+  putOption: null,
+  positionSymbols: []
 })
 export const supportedBrokers = ['Flattrade', 'Shoonya']
 export const MAX_RECONNECT_ATTEMPTS = 5
@@ -175,4 +189,3 @@ export const INITIAL_RECONNECT_DELAY = 1000
 export const reconnectAttempts = ref(0)
 export const reconnectTimeout = ref(null)
 export const wsConnectionState = ref('disconnected')
-export const messageQueue = ref([])

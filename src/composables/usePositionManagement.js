@@ -6,6 +6,7 @@ import {
   BASE_URL,
   flatTradePositionBook,
   flattradePositionsStale,
+  flattradePositionsLastUpdatedAt,
   shoonyaPositionBook,
   positionSecurityIds,
   socket,
@@ -157,17 +158,14 @@ export const fetchShoonyaOrdersTradesBook = async () => {
   }
 }
 export const updatePositionSecurityIds = () => {
-  flatTradePositionBook.value.forEach((position) => {
-    if (position.tsym && !positionSecurityIds.value[position.tsym]) {
-      positionSecurityIds.value[position.tsym] = position.token
-    }
-  })
-  // Add this block for Shoonya positions
-  shoonyaPositionBook.value.forEach((position) => {
-    if (position.tsym && !positionSecurityIds.value[position.tsym]) {
-      positionSecurityIds.value[position.tsym] = position.token
-    }
-  })
+  const positions = selectedBroker.value?.brokerName === 'Flattrade'
+    ? flatTradePositionBook.value
+    : shoonyaPositionBook.value
+  positionSecurityIds.value = Object.fromEntries(
+    positions
+      .filter((position) => position.tsym && position.token)
+      .map((position) => [position.tsym, position.token])
+  )
 }
 export const fetchFlattradePositions = async () => {
   const jKey = import.meta.env.PROD ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
@@ -175,12 +173,14 @@ export const fetchFlattradePositions = async () => {
   if (!import.meta.env.PROD && !jKey) {
     toastMessage.value = 'Token is missing. Please generate a token first.'
     showToast.value = true
+    flattradePositionsStale.value = true
     return
   }
 
   if (!selectedBroker.value || selectedBroker.value?.brokerName !== 'Flattrade') {
     toastMessage.value = 'Flattrade broker is not selected.'
     showToast.value = true
+    flattradePositionsStale.value = true
     return
   }
 
@@ -201,6 +201,7 @@ export const fetchFlattradePositions = async () => {
     ) {
       flatTradePositionBook.value = positionBookRes.data
       flattradePositionsStale.value = false
+      flattradePositionsLastUpdatedAt.value = Date.now()
       // console.log('Flattrade Position Book:', positionBookRes.data);
       updatePositionSecurityIds()
       subscribeToPositionLTPs()
@@ -210,6 +211,9 @@ export const fetchFlattradePositions = async () => {
     ) {
       flatTradePositionBook.value = []
       flattradePositionsStale.value = false
+      flattradePositionsLastUpdatedAt.value = Date.now()
+      updatePositionSecurityIds()
+      subscribeToPositionLTPs()
       // console.log('No positions in Flattrade Position Book');
     } else {
       console.error('Flattrade rejected the position book request')

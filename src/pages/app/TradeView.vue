@@ -11,8 +11,17 @@
       <div v-if="isProduction" class="alert alert-danger">
         Trading and automated stoplosses/targets are disabled. Manage positions and protective orders directly with your broker.
       </div>
-      <div v-if="selectedBroker?.brokerName === 'Flattrade' && flattradePositionsStale" class="alert alert-danger">
-        Position data is stale or unavailable. Verify current positions directly with your broker.
+      <div v-if="selectedBroker?.brokerName === 'Flattrade' && positionsStale" class="alert alert-danger">
+        Position data is stale or unavailable. Last successful refresh:
+        {{ flattradePositionsLastUpdatedAt ? new Date(flattradePositionsLastUpdatedAt).toLocaleTimeString() : 'never' }}.
+        Verify current positions directly with your broker.
+      </div>
+      <div
+        v-if="selectedBroker?.brokerName === 'Flattrade' && (!brokerStreamHealth.authenticated || wsConnectionState !== 'connected' || marketDataStale)"
+        class="alert alert-warning"
+      >
+        Broker stream {{ brokerStreamHealth.connectionState }}; browser connection {{ wsConnectionState }};
+        market data is {{ marketDataStale ? 'stale or unavailable' : 'current' }}.
       </div>
       <fieldset :disabled="isFormDisabled" :class="{ 'disabled-form': isFormDisabled }">
         <div class="row">
@@ -639,11 +648,12 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount } from 'vue';
+import { computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import BrokerComponent from '@/components/BrokerComponent.vue';
 import { checkAllTokens } from '@/composables/useBrokerTokenValidator';
 import { updateSelectedBrokerOnServer } from '@/api/broker';
+import { fetchFlattradePositions } from '@/composables/usePositionManagement';
 import PositionsTableComponent from '@/components/PositionsTableComponent.vue';
 import OrdersNTradesComponent from '@/components/OrdersNTradesComponent.vue';
 import LtpRangeBarComponent from '@/components/LtpRangeBarComponent.vue';
@@ -651,7 +661,7 @@ import PnlComponent from '@/components/PnlComponent.vue';
 
 // Global State
 import {
-  killSwitchActive, selectedCallStrike, selectedPutStrike, selectedMasterSymbol, shoonyaPositionBook, flatTradePositionBook, selectedBroker, selectedBrokerName, selectedExchange, socket, selectedProductType,
+  killSwitchActive, selectedCallStrike, selectedPutStrike, selectedMasterSymbol, shoonyaPositionBook, flatTradePositionBook, selectedBroker, selectedBrokerName, selectedExchange, selectedProductType,
   selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
   currentTime,
   showLTPRangeBar,
@@ -683,8 +693,8 @@ import {
   putHighPrice,
   putLowPrice,
   putClosePrice,
-  reconnectTimeout,
   wsConnectionState, productionAccountError, flattradePositionsStale,
+  flattradePositionsLastUpdatedAt, lastMarketDataAt, brokerStreamHealth,
 } from '@/stores/globalStore'
 
 // Kill Switch Composables
@@ -715,7 +725,7 @@ import {
 } from '@/composables/useFormatters'
 
 // WebSocket Composables
-import { connectWebSocket } from '@/composables/useWebSocket'
+import { connectWebSocket, disconnectWebSocket } from '@/composables/useWebSocket'
 
 // App Settings Composables
 import { setDefaultExpiry, riskReached, targetReached } from '@/composables/useAppSettings'
@@ -760,8 +770,47 @@ import {
 } from '@/composables/usePnlCalculations'
 
 const isProduction = import.meta.env.PROD;
+const marketDataStale = computed(
+  () => !lastMarketDataAt.value || currentTime.value - lastMarketDataAt.value > 30_000
+)
+const positionsStale = computed(
+  () => flattradePositionsStale.value ||
+    !flattradePositionsLastUpdatedAt.value ||
+    currentTime.value - flattradePositionsLastUpdatedAt.value > 120_000
+)
 let timer;
 let positionCheckInterval;
+let positionRefreshInterval;
+let positionRefreshInFlight = false;
+let brokerSelectionReady = false;
+
+watch([selectedBroker, brokerStatus], () => {
+  if (!brokerSelectionReady) return;
+  if (selectedBroker.value?.brokerName && brokerStatus.value === 'Connected') {
+    connectWebSocket();
+  } else {
+    disconnectWebSocket();
+  }
+});
+
+const refreshFlattradePositions = async () => {
+  if (
+    positionRefreshInFlight ||
+    activeTab.value !== 'positions' ||
+    selectedBroker.value?.brokerName !== 'Flattrade'
+  ) {
+    return;
+  }
+  positionRefreshInFlight = true;
+  try {
+    await fetchFlattradePositions();
+  } catch (error) {
+    flattradePositionsStale.value = true;
+    console.error('Unable to refresh Flattrade position data:', error.message);
+  } finally {
+    positionRefreshInFlight = false;
+  }
+};
 
 
 // Lifecycle hooks
@@ -794,6 +843,7 @@ onMounted(async () => {
       localStorage.removeItem('selectedBroker');
     }
   }
+  brokerSelectionReady = true;
 
   // Load cached trading data
   const cachedData = JSON.parse(localStorage.getItem('cachedTradingData'));
@@ -824,16 +874,9 @@ onMounted(async () => {
     currentTime.value = Date.now();
   }, 1000);
 
-  // Attempt WebSocket connection with retry
-  const attemptWebSocketConnection = () => {
-    if (selectedBroker.value?.brokerName && brokerStatus.value === 'Connected') {
-      connectWebSocket()
-    } else {
-      setTimeout(attemptWebSocketConnection, 500)
-    }
+  if (selectedBroker.value?.brokerName && brokerStatus.value === 'Connected') {
+    connectWebSocket()
   }
-
-  attemptWebSocketConnection()
 
   const ltpBarsavedPreference = localStorage.getItem('showLTPRangeBar');
   if (ltpBarsavedPreference !== null && JSON.parse(ltpBarsavedPreference) !== showLTPRangeBar.value) {
@@ -847,24 +890,20 @@ onMounted(async () => {
     updateStrikesForExpiry(selectedExpiry.value, true);
   }
   positionCheckInterval = setInterval(checkStoplossesAndTargets, 1000);
+  positionRefreshInterval = setInterval(refreshFlattradePositions, 60_000);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleHotKeys);
 
-  if (reconnectTimeout.value) {  // Access the ref value
-    clearTimeout(reconnectTimeout.value);
-    reconnectTimeout.value = null;
-  }
-
-  if (socket.value) {
-    socket.value.close();
-    socket.value = null;
-  }
+  disconnectWebSocket();
 
   clearInterval(timer);
   if (positionCheckInterval) {
     clearInterval(positionCheckInterval);
+  }
+  if (positionRefreshInterval) {
+    clearInterval(positionRefreshInterval);
   }
 });
 

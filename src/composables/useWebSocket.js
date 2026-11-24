@@ -1,9 +1,15 @@
+import { markRaw } from 'vue'
+
 import {
   socket,
   selectedBroker,
   wsConnectionState,
   reconnectAttempts,
-  messageQueue,
+  reconnectTimeout,
+  MAX_RECONNECT_ATTEMPTS,
+  INITIAL_RECONNECT_DELAY,
+  lastMarketDataAt,
+  brokerStreamHealth,
   selectedMasterSymbol,
   defaultCallSecurityId,
   defaultPutSecurityId,
@@ -40,14 +46,14 @@ import { brokerStatus } from '@/composables/useBrokerFunctions'
 // Trade Configuration Composables
 import { getExchangeSegment } from '@/composables/useTradeConfiguration'
 
+let connectionGeneration = 0
+let connectionUrl = null
+
 export const isWebSocketReady = () => {
   return socket.value && socket.value.readyState === WebSocket.OPEN
 }
 export const safeWebSocketSend = (data) => {
   if (!isWebSocketReady()) {
-    console.warn('WebSocket not ready, queuing message:', data)
-    // Queue the message to be sent when connection is restored
-    messageQueue.push(data)
     return false
   }
 
@@ -59,17 +65,39 @@ export const safeWebSocketSend = (data) => {
     return false
   }
 }
-export const connectWebSocket = () => {
-  let websocketUrl
-  let reconnectTimer = null
 
-  // Clear any existing connection state
-  if (socket.value) {
-    console.log('Closing existing WebSocket connection')
-    socket.value.close()
-    socket.value = null
+const resetSubscriptions = () => {
+  currentSubscriptions.value = {
+    masterSymbol: null,
+    masterSymbolExchangeCode: null,
+    masterSymbolSecurityId: null,
+    callOption: null,
+    putOption: null,
+    positionSymbols: []
   }
+}
 
+const clearReconnectTimer = () => {
+  if (reconnectTimeout.value !== null) {
+    clearTimeout(reconnectTimeout.value)
+    reconnectTimeout.value = null
+  }
+}
+
+export const disconnectWebSocket = () => {
+  connectionGeneration += 1
+  clearReconnectTimer()
+  const activeSocket = socket.value
+  socket.value = null
+  connectionUrl = null
+  resetSubscriptions()
+  wsConnectionState.value = 'disconnected'
+  if (activeSocket && activeSocket.readyState < WebSocket.CLOSING) {
+    activeSocket.close(1000, 'Client disconnected')
+  }
+}
+
+export const connectWebSocket = () => {
   const isDev = import.meta.env.DEV
   const wsBaseUrl = isDev
     ? 'ws://localhost'
@@ -87,33 +115,95 @@ export const connectWebSocket = () => {
     !['Flattrade', 'Shoonya'].includes(selectedBroker.value?.brokerName) ||
     brokerStatus.value !== 'Connected'
   ) {
+    disconnectWebSocket()
     console.error('Invalid broker or broker not connected')
     return
   }
 
-  websocketUrl = getWebSocketUrl(selectedBroker.value.brokerName)
+  const websocketUrl = getWebSocketUrl(selectedBroker.value.brokerName)
+  if (
+    socket.value &&
+    connectionUrl === websocketUrl &&
+    socket.value.readyState < WebSocket.CLOSING
+  ) {
+    return
+  }
+
+  disconnectWebSocket()
+  const generation = connectionGeneration
+  connectionUrl = websocketUrl
+  reconnectAttempts.value = 0
   console.log(`Attempting to connect to WebSocket at ${websocketUrl}`)
 
-  const connect = () => {
-    try {
-      socket.value = new WebSocket(websocketUrl)
+  const isCurrentConnection = () => generation === connectionGeneration
+  const brokerIsConnected = () =>
+    ['Flattrade', 'Shoonya'].includes(selectedBroker.value?.brokerName) &&
+    brokerStatus.value === 'Connected'
 
-      // Set a connection timeout
+  const scheduleReconnect = () => {
+    if (!isCurrentConnection() || reconnectTimeout.value !== null) return
+    if (!brokerIsConnected()) {
+      wsConnectionState.value = 'disconnected'
+      return
+    }
+    if (reconnectAttempts.value >= MAX_RECONNECT_ATTEMPTS) {
+      wsConnectionState.value = 'error'
+      const failedSocket = socket.value
+      socket.value = null
+      resetSubscriptions()
+      if (failedSocket && failedSocket.readyState < WebSocket.CLOSING) {
+        failedSocket.close()
+      }
+      return
+    }
+    reconnectAttempts.value += 1
+    const delay = Math.min(
+      30_000,
+      INITIAL_RECONNECT_DELAY * 2 ** (reconnectAttempts.value - 1)
+    )
+    const jitteredDelay = Math.round(delay * (0.75 + Math.random() * 0.5))
+    reconnectTimeout.value = setTimeout(() => {
+      reconnectTimeout.value = null
+      if (!isCurrentConnection() || !brokerIsConnected()) return
+      const failedSocket = socket.value
+      socket.value = null
+      resetSubscriptions()
+      if (failedSocket && failedSocket.readyState < WebSocket.CLOSING) {
+        failedSocket.close()
+      }
+      connect()
+    }, jitteredDelay)
+  }
+
+  const connect = () => {
+    if (!isCurrentConnection() || !brokerIsConnected()) return
+    wsConnectionState.value = 'connecting'
+    let activeSocket
+    try {
+      activeSocket = new WebSocket(websocketUrl)
+      socket.value = markRaw(activeSocket)
+
       const connectionTimeout = setTimeout(() => {
-        if (socket.value?.readyState !== WebSocket.OPEN) {
-          console.log('Connection timeout, retrying...')
-          socket.value?.close()
-          reconnect()
+        if (
+          isCurrentConnection() &&
+          socket.value === activeSocket &&
+          activeSocket.readyState !== WebSocket.OPEN
+        ) {
+          activeSocket.close()
+          scheduleReconnect()
         }
       }, 5000)
 
-      socket.value.onopen = (event) => {
+      activeSocket.onopen = () => {
+        if (!isCurrentConnection() || socket.value !== activeSocket) {
+          activeSocket.close(1000, 'Superseded connection')
+          return
+        }
         clearTimeout(connectionTimeout)
-        console.log('WebSocket connection opened:', event)
+        clearReconnectTimer()
         wsConnectionState.value = 'connected'
         reconnectAttempts.value = 0
 
-        // Immediately send initial subscriptions
         const initialData = {
           action: 'initialize',
           broker: selectedBroker.value.brokerName,
@@ -121,46 +211,36 @@ export const connectWebSocket = () => {
           callSecurityId: defaultCallSecurityId.value,
           putSecurityId: defaultPutSecurityId.value
         }
-        socket.value.send(JSON.stringify(initialData))
+        activeSocket.send(JSON.stringify(initialData))
 
-        // Subscribe to required symbols immediately
         subscribeToMasterSymbol()
         subscribeToOptions()
       }
 
-      socket.value.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-          // Process message immediately
+      activeSocket.onmessage = (event) => {
+        if (isCurrentConnection() && socket.value === activeSocket) {
           handleWebSocketMessage(event)
-        } catch (error) {
-          console.error('Error handling WebSocket message:', error)
         }
       }
 
-      socket.value.onerror = (error) => {
-        console.error('WebSocket error:', error)
+      activeSocket.onerror = () => {
+        if (!isCurrentConnection() || socket.value !== activeSocket) return
         wsConnectionState.value = 'error'
+        scheduleReconnect()
       }
 
-      socket.value.onclose = (event) => {
-        console.log('WebSocket connection closed:', event)
+      activeSocket.onclose = () => {
+        clearTimeout(connectionTimeout)
+        if (!isCurrentConnection() || socket.value !== activeSocket) return
+        socket.value = null
         wsConnectionState.value = 'disconnected'
-        if (!event.wasClean) {
-          reconnect()
-        }
+        resetSubscriptions()
+        scheduleReconnect()
       }
     } catch (error) {
-      console.error('Error creating WebSocket connection:', error)
-      reconnect()
+      console.error('Error creating WebSocket connection:', error.message)
+      scheduleReconnect()
     }
-  }
-
-  const reconnect = () => {
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer)
-    }
-    reconnectTimer = setTimeout(connect, 1000)
   }
 
   connect()
@@ -169,32 +249,22 @@ export const connectWebSocket = () => {
 export const handleWebSocketMessage = (event) => {
   try {
     const data = JSON.parse(event.data)
-    // console.log('Processing WebSocket message:', data)
+    if (data.type === 'stream_health' && data.status && typeof data.status === 'object') {
+      brokerStreamHealth.value = data.status
+      const lastTickAt = Date.parse(data.status.lastTickAt)
+      if (Number.isFinite(lastTickAt)) lastMarketDataAt.value = lastTickAt
+      return
+    }
 
-    // Process quote data immediately
-    if (data.lp) {
-      // Update master symbol price first
+    const lastPrice = Number(data.lp)
+    if (data.tk && data.lp !== undefined && Number.isFinite(lastPrice)) {
+      lastMarketDataAt.value = Date.now()
       updateMasterSymbolPrice(data)
-
-      // Update option prices
       updateOptionPrices(data)
-
-      // Update position LTPs
       updatePositionLTPs(data)
-
-      // Log updates for debugging
-      // console.log('Updated prices:', {
-      //   masterSymbol: selectedMasterSymbol.value,
-      //   securityId: data.tk,
-      //   price: data.lp,
-      //   callSecurityId: defaultCallSecurityId.value,
-      //   putSecurityId: defaultPutSecurityId.value,
-      //   callPrice: latestCallLTP.value,
-      //   putPrice: latestPutLTP.value
-      // })
     }
   } catch (error) {
-    console.error('Error processing WebSocket message:', error)
+    console.error('Error processing WebSocket message:', error.message)
   }
 }
 
@@ -287,10 +357,14 @@ export const subscribeToMasterSymbol = () => {
   const symbolInfo = exchangeSymbols.value.symbolData[selectedMasterSymbol.value]
   if (symbolInfo) {
     const symbolToSubscribe = `${symbolInfo.exchangeCode}|${symbolInfo.exchangeSecurityId}`
-    if (
-      symbolToSubscribe !==
-      `${currentSubscriptions.value.masterSymbolExchangeCode}|${currentSubscriptions.value.masterSymbolSecurityId}`
-    ) {
+    const previousSymbol = currentSubscriptions.value.masterSymbolExchangeCode &&
+      currentSubscriptions.value.masterSymbolSecurityId
+      ? `${currentSubscriptions.value.masterSymbolExchangeCode}|${currentSubscriptions.value.masterSymbolSecurityId}`
+      : null
+    if (symbolToSubscribe !== previousSymbol) {
+      if (previousSymbol && !safeWebSocketSend({ action: 'unsubscribe', symbols: [previousSymbol] })) {
+        return
+      }
       const data = {
         action: 'subscribe',
         symbols: [symbolToSubscribe]
@@ -306,29 +380,33 @@ export const subscribeToMasterSymbol = () => {
 }
 export const subscribeToOptions = () => {
   if (socket.value && socket.value.readyState === WebSocket.OPEN) {
-    const symbolsToSubscribe = []
     const exchangeSegment = getExchangeSegment()
+    const nextCallOption = defaultCallSecurityId.value && defaultCallSecurityId.value !== 'N/A'
+      ? `${exchangeSegment}|${defaultCallSecurityId.value}`
+      : null
+    const nextPutOption = defaultPutSecurityId.value && defaultPutSecurityId.value !== 'N/A'
+      ? `${exchangeSegment}|${defaultPutSecurityId.value}`
+      : null
+    const previousOptions = [
+      currentSubscriptions.value.callOption,
+      currentSubscriptions.value.putOption
+    ].filter((symbol) => symbol && ![nextCallOption, nextPutOption].includes(symbol))
+    const nextOptions = [nextCallOption, nextPutOption]
+      .filter((symbol) => symbol && ![
+        currentSubscriptions.value.callOption,
+        currentSubscriptions.value.putOption
+      ].includes(symbol))
 
-    // Add subscriptions for both Call and Put options
-    if (defaultCallSecurityId.value && defaultCallSecurityId.value !== 'N/A') {
-      symbolsToSubscribe.push(`${exchangeSegment}|${defaultCallSecurityId.value}`)
-      currentSubscriptions.value.callOption = defaultCallSecurityId.value
+    if (previousOptions.length > 0) {
+      if (!safeWebSocketSend({ action: 'unsubscribe', symbols: previousOptions })) return
     }
-    if (defaultPutSecurityId.value && defaultPutSecurityId.value !== 'N/A') {
-      symbolsToSubscribe.push(`${exchangeSegment}|${defaultPutSecurityId.value}`)
-      currentSubscriptions.value.putOption = defaultPutSecurityId.value
+    if (nextOptions.length > 0) {
+      if (!safeWebSocketSend({ action: 'subscribe', symbols: nextOptions })) return
     }
-
-    if (symbolsToSubscribe.length > 0) {
-      const data = {
-        action: 'subscribe',
-        symbols: symbolsToSubscribe
-      }
-      socket.value.send(JSON.stringify(data))
-    }
+    currentSubscriptions.value.callOption = nextCallOption
+    currentSubscriptions.value.putOption = nextPutOption
   }
 
-  // Subscribe to position LTPs separately
   subscribeToPositionLTPs()
 }
 
@@ -338,14 +416,13 @@ export const unsubscribeFromSymbols = (symbols) => {
       action: 'unsubscribe',
       symbols: symbols
     }
-    // console.log('Sending unsubscribe data:', data);
-    socket.value.send(JSON.stringify(data))
+    safeWebSocketSend(data)
   }
 }
 
 export const subscribeToPositionLTPs = () => {
   if (socket.value && socket.value.readyState === WebSocket.OPEN) {
-    const symbolsToSubscribe = Object.entries(positionSecurityIds.value)
+    const symbolsToSubscribe = [...new Set(Object.entries(positionSecurityIds.value)
       .map(([tsym, token]) => {
         const position = [...flatTradePositionBook.value, ...shoonyaPositionBook.value].find(
           (p) => p.tsym === tsym
@@ -359,15 +436,18 @@ export const subscribeToPositionLTPs = () => {
         const exchange = position.exch || position.exchangeSegment
         return `${exchange}|${token}`
       })
-      .filter(Boolean)
+      .filter(Boolean))]
 
-    if (symbolsToSubscribe.length > 0) {
-      const data = {
-        action: 'subscribe',
-        symbols: symbolsToSubscribe
-      }
-      // console.log('Sending position LTPs subscribe data:', data);
-      socket.value.send(JSON.stringify(data))
+    const previousSymbols = currentSubscriptions.value.positionSymbols || []
+    const symbolsToUnsubscribe = previousSymbols.filter((symbol) => !symbolsToSubscribe.includes(symbol))
+    const newSymbols = symbolsToSubscribe.filter((symbol) => !previousSymbols.includes(symbol))
+
+    if (symbolsToUnsubscribe.length > 0) {
+      if (!safeWebSocketSend({ action: 'unsubscribe', symbols: symbolsToUnsubscribe })) return
     }
+    if (newSymbols.length > 0) {
+      if (!safeWebSocketSend({ action: 'subscribe', symbols: newSymbols })) return
+    }
+    currentSubscriptions.value.positionSymbols = symbolsToSubscribe
   }
 }
