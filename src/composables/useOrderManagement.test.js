@@ -1,14 +1,31 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import axios from 'axios'
-import { cancelOrder, closeAllPositions } from './useOrderManagement'
+import { cancelOrder, closeAllPositions, prepareOrderPayload } from './useOrderManagement'
 import {
-  selectedBroker, selectedMasterSymbol, selectedExchange, flatTradePositionBook, toastMessage
+  selectedBroker, selectedMasterSymbol, selectedExchange, flatTradePositionBook, toastMessage,
+  selectedProductType, selectedOrderType, selectedQuantity
 } from '@/stores/globalStore'
 
 vi.hoisted(() => {
   vi.stubGlobal('localStorage', jsdom.window.localStorage)
 })
 afterEach(() => vi.restoreAllMocks())
+
+it('preserves buy/sell and intraday/margin when using encoded modal values', () => {
+  selectedBroker.value = { brokerName: 'Flattrade', clientId: 'test-user' }
+  selectedOrderType.value = 'MKT'
+  selectedQuantity.value = 50
+  const strike = { tradingSymbol: 'NIFTYCE' }
+
+  selectedProductType.value = 'I'
+  expect(prepareOrderPayload('B', 'CALL', strike, 'NFO')).toMatchObject({
+    trantype: 'B', prd: 'I'
+  })
+  selectedProductType.value = 'M'
+  expect(prepareOrderPayload('S', 'CALL', strike, 'NFO')).toMatchObject({
+    trantype: 'S', prd: 'M'
+  })
+})
 
 it('does not report positions closed when the trading gate rejects the close order', async () => {
   selectedBroker.value = { brokerName: 'Flattrade', clientId: 'test-user' }

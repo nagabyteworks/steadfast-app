@@ -64,19 +64,19 @@ export const selectedLots = computed({
 })
 
 export const getProductTypeValue = (productType) => {
-  if (selectedBroker.value?.brokerName === 'Flattrade') {
-    return productType === 'Intraday' ? 'I' : 'M'
-  } else if (selectedBroker.value?.brokerName === 'Shoonya') {
-    return productType === 'Intraday' ? 'I' : 'M'
+  if (['Flattrade', 'Shoonya'].includes(selectedBroker.value?.brokerName)) {
+    if (productType === 'Intraday' || productType === 'I') return 'I'
+    if (productType === 'Margin' || productType === 'M') return 'M'
+    throw new Error('Invalid product type')
   }
   return productType
 }
 
 export const getTransactionType = (type) => {
-  if (selectedBroker.value?.brokerName === 'Flattrade') {
-    return type === 'BUY' ? 'B' : 'S'
-  } else if (selectedBroker.value?.brokerName === 'Shoonya') {
-    return type === 'BUY' ? 'B' : 'S'
+  if (['Flattrade', 'Shoonya'].includes(selectedBroker.value?.brokerName)) {
+    if (type === 'BUY' || type === 'B') return 'B'
+    if (type === 'SELL' || type === 'S') return 'S'
+    throw new Error('Invalid transaction type')
   }
   return type
 }

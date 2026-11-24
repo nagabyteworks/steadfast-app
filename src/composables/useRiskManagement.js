@@ -18,6 +18,50 @@ import {
 import { placeOrderForPosition } from '@/composables/useOrderManagement'
 
 const pendingDefaultProtection = new Set()
+const riskExitLockPrefix = 'steadfast:risk-exit:'
+
+export const resetRiskExitLocks = () => {
+  for (let index = localStorage.length - 1; index >= 0; index--) {
+    const key = localStorage.key(index)
+    if (key?.startsWith(riskExitLockPrefix)) localStorage.removeItem(key)
+  }
+}
+
+const submitRiskExit = (position, reason) => {
+  const quantity = Number(position.netqty ?? position.netQty)
+  if (!Number.isSafeInteger(quantity) || quantity === 0) return
+
+  if (!navigator.locks) {
+    toastMessage.value = 'Automatic exit unavailable: browser locking is not supported. Manage this position with Flattrade.'
+    showToast.value = true
+    return
+  }
+
+  const key = `${riskExitLockPrefix}${encodeURIComponent(position.tsym)}`
+  navigator.locks.request(key, { ifAvailable: true }, async (lock) => {
+    if (!lock || localStorage.getItem(key)) return
+
+    // Persist before submission: a timeout or reload must never retry an uncertain order.
+    localStorage.setItem(key, 'verification-required')
+    const accepted = await placeOrderForPosition(
+      quantity > 0 ? 'S' : 'B',
+      position.tsym.includes('C') ? 'CALL' : 'PUT',
+      position
+    )
+    if (accepted) {
+      removeStoploss(position)
+      removeTarget(position)
+    }
+    toastMessage.value = accepted
+      ? `${reason} exit submitted for ${position.tsym}. Verify fills with Flattrade before resetting the safety lock.`
+      : `${reason} exit failed or is uncertain for ${position.tsym}. Verify with Flattrade before resetting the safety lock.`
+    showToast.value = true
+  }).catch((error) => {
+    console.error('Unable to safely submit automated exit:', error)
+    toastMessage.value = 'Automatic exit unavailable. Verify orders and positions directly with Flattrade.'
+    showToast.value = true
+  })
+}
 
 export const scheduleDefaultProtection = (tradingSymbol) => {
   if (enableStoploss.value || enableTarget.value) {
@@ -180,15 +224,7 @@ export const checkTargets = (newLTPs) => {
       const isLongPosition = position.netqty > 0
       if ((isLongPosition && currentLTP >= target) || (!isLongPosition && currentLTP <= target)) {
         console.log(`Target reached for ${tsym}. Placing order to close position.`)
-        const transactionType = isLongPosition ? 'S' : 'B'
-        placeOrderForPosition(
-          transactionType,
-          position.tsym.includes('C') ? 'CALL' : 'PUT',
-          position
-        )
-        removeTarget(position)
-        toastMessage.value = 'Target hit for ' + tsym
-        showToast.value = true
+        submitRiskExit(position, 'Target')
       }
     }
   }
@@ -220,14 +256,7 @@ export const checkStoplosses = () => {
         }
         if ((isLongPosition && currentLTP <= sl) || (!isLongPosition && currentLTP >= sl)) {
           console.log(`Static SL hit for ${tsym}: LTP ${currentLTP}, SL ${sl}`)
-          placeOrderForPosition(
-            isLongPosition ? 'S' : 'B',
-            position.tsym.includes('C') ? 'CALL' : 'PUT',
-            position
-          )
-          removeStoploss(position)
-          toastMessage.value = 'Stoploss hit for ' + tsym
-          showToast.value = true
+          submitRiskExit(position, 'Stop-loss')
         }
       }
     }
@@ -254,11 +283,7 @@ export const checkStoplosses = () => {
           } else if (currentLTP <= tsl && !tslHitPositions.has(tsym)) {
             // Hit TSL for long positions
             console.log(`TSL hit for ${tsym}: LTP ${currentLTP}, TSL ${tsl}`)
-            placeOrderForPosition('S', position.tsym.includes('C') ? 'CALL' : 'PUT', position)
-            removeStoploss(position)
-            toastMessage.value = 'Trailing Stoploss hit for ' + tsym
-            showToast.value = true
-            tslHitPositions.add(tsym) // Mark TSL as hit
+            submitRiskExit(position, 'Trailing stop-loss')
           }
         } else {
           if (currentLTP < tsl - stoplossValueNum) {
@@ -267,11 +292,7 @@ export const checkStoplosses = () => {
           } else if (currentLTP >= tsl && !tslHitPositions.has(tsym)) {
             // Hit TSL for short positions
             console.log(`TSL hit for ${tsym}: LTP ${currentLTP}, TSL ${tsl}`)
-            placeOrderForPosition('B', position.tsym.includes('C') ? 'CALL' : 'PUT', position)
-            removeStoploss(position)
-            toastMessage.value = 'Trailing Stoploss hit for ' + tsym
-            showToast.value = true
-            tslHitPositions.add(tsym) // Mark TSL as hit
+            submitRiskExit(position, 'Trailing stop-loss')
           }
         }
       }

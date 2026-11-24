@@ -12,6 +12,11 @@
         Production orders may place live NSE derivatives trades and are limited to one contract lot each.
         Stop-loss/target automation runs in this browser only; keep this page and its market-data connection active.
         If both protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured.
+        After an automatic exit attempt, verify orders and positions with Flattrade before resetting its safety lock.
+        Locks coordinate tabs in this browser, not other devices or manually submitted orders.
+        <button type="button" class="btn btn-sm btn-outline-danger ms-2" @click="resetExitLocks">
+          Reset automatic-exit locks
+        </button>
       </div>
       <div v-if="selectedBroker?.brokerName === 'Flattrade' && positionsStale" class="alert alert-danger">
         Position data is stale or unavailable. Last successful refresh:
@@ -712,7 +717,7 @@ import { productTypes, getProductTypeValue, updateAvailableQuantities, orderType
 import { closeAllPositions, cancelPendingOrders, closeSelectedPositions } from '@/composables/useOrderManagement'
 
 // Risk Management Composables
-import { checkStoplossesAndTargets, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget } from '@/composables/useRiskManagement'
+import { checkStoplossesAndTargets, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget, resetRiskExitLocks } from '@/composables/useRiskManagement'
 
 // Keyboard Shortcuts Composables
 import { handleHotKeys } from '@/composables/useKeyboardShortcuts'
@@ -772,6 +777,11 @@ import {
 } from '@/composables/usePnlCalculations'
 
 const isProduction = import.meta.env.PROD;
+const resetExitLocks = () => {
+  if (window.confirm('Verify all orders and positions in Flattrade first. Reset automatic-exit locks?')) {
+    resetRiskExitLocks();
+  }
+};
 const marketDataStale = computed(
   () => !lastMarketDataAt.value || currentTime.value - lastMarketDataAt.value > 30_000
 )
