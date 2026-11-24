@@ -17,82 +17,82 @@ import {
 // Order Management Composables
 import { placeOrderForPosition } from '@/composables/useOrderManagement'
 
-export const setStoploss = (position, type) => {
-  if (import.meta.env.PROD) {
-    toastMessage.value = 'Stoploss automation is unavailable. Manage protection with your broker.'
-    showToast.value = true
-    return
+const pendingDefaultProtection = new Set()
+
+export const scheduleDefaultProtection = (tradingSymbol) => {
+  if (enableStoploss.value || enableTarget.value) {
+    pendingDefaultProtection.add(tradingSymbol)
   }
+}
+
+export const setStoploss = (position, type) => {
   if (!enableStoploss.value) {
     console.log('Stoploss is disabled.')
-    return
+    return false
   }
   const quantity = Math.abs(Number(position.netQty || position.netqty))
 
   if (quantity === 0) {
     console.log(`Quantity is zero for ${position.tsym}, no stoploss will be set.`)
-    return
+    return false
   }
 
-  const ltp = parseFloat(positionLTPs.value[position.tsym])
+  const ltp = parseFloat(positionLTPs.value[position.tsym] ?? position.netavgprc ?? position.netAvgPrice)
   if (isNaN(ltp)) {
     console.error(`Invalid LTP for ${position.tsym}: ${positionLTPs.value[position.tsym]}`)
-    return
+    return false
   }
 
   const stoplossValueNum = parseFloat(stoplossValue.value)
   if (isNaN(stoplossValueNum)) {
     console.error(`Invalid stoploss value: ${stoplossValue.value}`)
-    return
+    return false
   }
 
-  const isLongPosition = position.netqty > 0
+  const isLongPosition = Number(position.netqty ?? position.netQty) > 0
   let stoplossPrice
 
-  try {
-    switch (type) {
-      case 'trailing':
-        stoplossPrice = isLongPosition ? ltp - stoplossValueNum : ltp + stoplossValueNum
-        trailingStoplosses.value[position.tsym] = parseFloat(stoplossPrice.toFixed(2))
-        stoplosses.value[position.tsym] = null
-        console.log(`TSL set for ${position.tsym}: ${stoplossPrice.toFixed(2)}`)
-        break
-      case 'static':
-        stoplossPrice = isLongPosition ? ltp - stoplossValueNum : ltp + stoplossValueNum
-        stoplosses.value[position.tsym] = parseFloat(stoplossPrice.toFixed(2))
-        trailingStoplosses.value[position.tsym] = null
-        console.log(`SL set for ${position.tsym}: ${stoplossPrice.toFixed(2)}`)
-        break
-      case 'convert_to_tsl':
-        const existingSL = stoplosses.value[position.tsym]
-        if (existingSL !== null) {
-          trailingStoplosses.value[position.tsym] = existingSL
-          stoplosses.value[position.tsym] = null
-          console.log(`Converted SL to TSL for ${position.tsym}: ${existingSL.toFixed(2)}`)
-        } else {
-          console.error(`No existing SL to convert for ${position.tsym}`)
-          return
-        }
-        break
-      case 'convert_to_sl':
-        const existingTSL = trailingStoplosses.value[position.tsym]
-        if (existingTSL !== null) {
-          stoplosses.value[position.tsym] = existingTSL
-          trailingStoplosses.value[position.tsym] = null
-          console.log(`Converted TSL to SL for ${position.tsym}: ${existingTSL.toFixed(2)}`)
-        } else {
-          console.error(`No existing TSL to convert for ${position.tsym}`)
-          return
-        }
-        break
-      default:
-        console.error(`Unknown stoploss type: ${type}`)
-        return
+  switch (type) {
+    case 'trailing':
+      stoplossPrice = isLongPosition ? ltp - stoplossValueNum : ltp + stoplossValueNum
+      trailingStoplosses.value[position.tsym] = parseFloat(stoplossPrice.toFixed(2))
+      stoplosses.value[position.tsym] = null
+      console.log(`TSL set for ${position.tsym}: ${stoplossPrice.toFixed(2)}`)
+      break
+    case 'static':
+      stoplossPrice = isLongPosition ? ltp - stoplossValueNum : ltp + stoplossValueNum
+      stoplosses.value[position.tsym] = parseFloat(stoplossPrice.toFixed(2))
+      trailingStoplosses.value[position.tsym] = null
+      console.log(`SL set for ${position.tsym}: ${stoplossPrice.toFixed(2)}`)
+      break
+    case 'convert_to_tsl': {
+      const existingSL = stoplosses.value[position.tsym]
+      if (existingSL === null || existingSL === undefined) {
+        console.error(`No existing SL to convert for ${position.tsym}`)
+        return false
+      }
+      trailingStoplosses.value[position.tsym] = existingSL
+      stoplosses.value[position.tsym] = null
+      console.log(`Converted SL to TSL for ${position.tsym}: ${existingSL.toFixed(2)}`)
+      break
     }
-    tslHitPositions.delete(position.tsym)
-  } catch (error) {
-    console.error(`Error setting ${type} stoploss for ${position.tsym}:`, error)
+    case 'convert_to_sl': {
+      const existingTSL = trailingStoplosses.value[position.tsym]
+      if (existingTSL === null || existingTSL === undefined) {
+        console.error(`No existing TSL to convert for ${position.tsym}`)
+        return false
+      }
+      stoplosses.value[position.tsym] = existingTSL
+      trailingStoplosses.value[position.tsym] = null
+      console.log(`Converted TSL to SL for ${position.tsym}: ${existingTSL.toFixed(2)}`)
+      break
+    }
+    default:
+      console.error(`Unknown stoploss type: ${type}`)
+      return false
   }
+  tslHitPositions.delete(position.tsym)
+  return true
 }
 export const removeStoploss = (position) => {
   stoplosses.value[position.tsym] = null
@@ -111,36 +111,34 @@ export const decreaseStoploss = (position) => {
   }
 }
 export const setTarget = (position) => {
-  if (import.meta.env.PROD) {
-    toastMessage.value = 'Target automation is unavailable. Manage positions with your broker.'
-    showToast.value = true
-    return
-  }
   if (!enableTarget.value) {
     console.log('Target is disabled.')
-    return
+    return false
   }
   const quantity = Math.abs(Number(position.netQty || position.netqty))
 
   if (quantity === 0) {
     console.log(`Quantity is zero for ${position.tsym}, no target will be set.`)
-    return
+    return false
   }
 
   if (enableTarget.value && targetValue.value > 0) {
-    const ltp = positionLTPs.value[position.tsym]
+    const ltp = positionLTPs.value[position.tsym] ?? position.netavgprc ?? position.netAvgPrice
+    const ltpNum = parseFloat(ltp)
+    if (!Number.isFinite(ltpNum)) {
+      console.error(`Invalid LTP for ${position.tsym}: ${ltp}`)
+      return false
+    }
 
-    // Set target above the LTP for all positions, rounded to 2 decimal places
+    const isLongPosition = Number(position.netqty ?? position.netQty) > 0
     targets.value[position.tsym] = Number(
-      (parseFloat(ltp) + parseFloat(targetValue.value)).toFixed(2)
+      (ltpNum + (isLongPosition ? 1 : -1) * parseFloat(targetValue.value)).toFixed(2)
     )
 
     // console.log(`Target set for ${position.tsym}: LTP = ${ltp}, TargetValue = ${targetValue.value}, Target = ${targets.value[position.tsym]}`);
-  } else {
-    // If target is not enabled or targetValue is not set, remove any existing target
-    targets.value[position.tsym] = null
-    // console.log(`Target removed for ${position.tsym}`);
+    return true
   }
+  return false
 }
 export const removeTarget = (position) => {
   targets.value[position.tsym] = null
@@ -281,7 +279,22 @@ export const checkStoplosses = () => {
   }
 }
 export const checkStoplossesAndTargets = () => {
-  if (import.meta.env.PROD) return
+  for (const tsym of pendingDefaultProtection) {
+    const position = [...flatTradePositionBook.value, ...shoonyaPositionBook.value].find(
+      (item) => item.tsym === tsym
+    )
+    if (!position) continue
+
+    let armed = true
+    if (enableStoploss.value && stoplossValue.value > 0 && stoplosses.value[tsym] == null) {
+      armed = setStoploss(position, 'static') && armed
+    }
+    if (enableTarget.value && targetValue.value > 0 && targets.value[tsym] == null) {
+      armed = setTarget(position) && armed
+    }
+    if (armed) pendingDefaultProtection.delete(tsym)
+  }
+
   checkStoplosses()
   checkTargets()
 }

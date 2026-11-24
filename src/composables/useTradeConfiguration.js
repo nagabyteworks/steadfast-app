@@ -56,9 +56,9 @@ export const getExchangeSegment = () => {
 }
 
 export const selectedLots = computed({
-  get: () => lotsPerSymbol.value[selectedMasterSymbol.value] || 1,
+  get: () => import.meta.env.PROD ? 1 : lotsPerSymbol.value[selectedMasterSymbol.value] || 1,
   set: (value) => {
-    lotsPerSymbol.value[selectedMasterSymbol.value] = value
+    lotsPerSymbol.value[selectedMasterSymbol.value] = import.meta.env.PROD ? 1 : value
     saveLots()
   }
 })
@@ -93,7 +93,8 @@ export const productTypes = computed(() => {
 export const updateAvailableQuantities = () => {
   const instrument = quantities.value[selectedMasterSymbol.value]
   if (instrument) {
-    availableQuantities.value = Array.from({ length: instrument.maxLots }, (_, i) => ({
+    const maxLots = import.meta.env.PROD ? 1 : instrument.maxLots
+    availableQuantities.value = Array.from({ length: maxLots }, (_, i) => ({
       lots: i + 1,
       quantity: (i + 1) * instrument.lotSize
     }))
@@ -141,7 +142,7 @@ export const loadLots = () => {
 export const updateSelectedQuantity = () => {
   const instrument = quantities.value[selectedMasterSymbol.value]
   if (instrument) {
-    const maxLots = instrument.maxLots // Use maxLots from the instrument
+    const maxLots = import.meta.env.PROD ? 1 : instrument.maxLots
     const lots = Math.min(Math.max(1, selectedLots.value), maxLots)
     lotsPerSymbol.value[selectedMasterSymbol.value] = lots
     selectedQuantity.value = lots * instrument.lotSize

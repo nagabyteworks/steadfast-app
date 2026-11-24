@@ -15,7 +15,8 @@ import {
   selectedBroker,
   selectedExpiry,
   expiryDates,
-  dataFetched
+  dataFetched,
+  quantities
 } from '@/stores/globalStore'
 
 // Trade Configuration Composables
@@ -37,20 +38,23 @@ export const fetchTradingData = async () => {
         throw new Error(`Unknown symbol: ${symbol}`)
       }
 
-      let response
+      let brokerPath
       if (selectedBroker.value?.brokerName === 'Flattrade') {
-        response = await fetch(
-          `${BASE_URL}/shoonya/symbols?exchangeSymbol=${exchangeSymbol}&masterSymbol=${symbol}`
-        )
+        brokerPath = 'flattrade'
       } else if (selectedBroker.value?.brokerName === 'Shoonya') {
-        response = await fetch(
-          `${BASE_URL}/shoonya/symbols?exchangeSymbol=${exchangeSymbol}&masterSymbol=${symbol}`
-        )
+        brokerPath = 'shoonya'
       } else {
         throw new Error('Unsupported broker')
       }
 
+      const response = await fetch(
+        `${BASE_URL}/${brokerPath}/symbols?exchangeSymbol=${exchangeSymbol}&masterSymbol=${symbol}`
+      )
       const data = await response.json()
+      const lotSize = Number(data.callStrikes?.[0]?.lotSize || data.putStrikes?.[0]?.lotSize)
+      if (Number.isSafeInteger(lotSize) && lotSize > 0 && quantities.value[symbol]) {
+        quantities.value[symbol].lotSize = lotSize
+      }
 
       allSymbolsData[symbol] = {
         expiryDates: data.expiryDates || [],

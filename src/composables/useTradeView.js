@@ -188,6 +188,7 @@ export const todayExpirySymbol = computed(() => {
 })
 
 export const maxLots = computed(() => {
+  if (import.meta.env.PROD) return 1
   const instrument = quantities.value[selectedMasterSymbol.value]
   return instrument ? instrument.maxLots : 280
 })

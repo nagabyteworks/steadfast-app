@@ -9,7 +9,9 @@
   <section class="row mt-2">
     <form @submit.prevent>
       <div v-if="isProduction" class="alert alert-danger">
-        Trading and automated stoplosses/targets are disabled. Manage positions and protective orders directly with your broker.
+        Production orders may place live NSE derivatives trades and are limited to one contract lot each.
+        Stop-loss/target automation runs in this browser only; keep this page and its market-data connection active.
+        If both protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured.
       </div>
       <div v-if="selectedBroker?.brokerName === 'Flattrade' && positionsStale" class="alert alert-danger">
         Position data is stale or unavailable. Last successful refresh:
@@ -854,6 +856,9 @@ onMounted(async () => {
     updateExchangeSymbols();
     setDefaultExchangeAndMasterSymbol();
     updateSymbolData(selectedMasterSymbol.value);
+    if (isProduction) {
+      await fetchTradingData();
+    }
   } else {
     updateExchangeSymbols();
     setDefaultExchangeAndMasterSymbol();

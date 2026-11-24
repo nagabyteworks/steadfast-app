@@ -47,7 +47,11 @@ import {
 } from '@/composables/usePositionManagement'
 
 // Risk Management Composables
-import { setStoploss, setTarget } from '@/composables/useRiskManagement'
+import {
+  scheduleDefaultProtection,
+  setStoploss,
+  setTarget
+} from '@/composables/useRiskManagement'
 
 export const prepareOrderPayload = (
   transactionType,
@@ -108,17 +112,37 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     }
 
     const exchangeSegment = getExchangeSegment()
+    if (import.meta.env.PROD && exchangeSegment !== 'NFO') {
+      throw new Error('Production orders are limited to NSE derivatives')
+    }
+
+    if (enableStoploss.value && (!Number.isFinite(Number(stoplossValue.value)) || Number(stoplossValue.value) <= 0)) {
+      throw new Error('Enabled stop-loss must be greater than zero points')
+    }
+    if (enableTarget.value && (!Number.isFinite(Number(targetValue.value)) || Number(targetValue.value) <= 0)) {
+      throw new Error('Enabled target must be greater than zero points')
+    }
+
     const instrument = quantities.value[selectedMasterSymbol.value]
-    const freezeLimit = instrument.freezeLimit
-    const orderLots = selectedLots.value
-    const fullOrderQuantity = selectedQuantity.value
+    const liveLotSize = Number(selectedStrike.lotSize)
+    if (import.meta.env.PROD && (!Number.isSafeInteger(liveLotSize) || liveLotSize <= 0)) {
+      throw new Error('NSE contract lot size is unavailable; order was not sent')
+    }
+    const freezeLimit = import.meta.env.PROD ? 1 : instrument.freezeLimit
+    const orderLots = import.meta.env.PROD ? 1 : selectedLots.value
+    const fullOrderQuantity = import.meta.env.PROD ? liveLotSize : selectedQuantity.value
+    if (import.meta.env.PROD) {
+      selectedQuantity.value = liveLotSize
+    }
 
     let remainingLots = orderLots
     let placedLots = 0
 
     while (remainingLots > 0) {
       const lotsToPlace = Math.min(remainingLots, freezeLimit)
-      const quantityToPlace = lotsToPlace * instrument.lotSize
+      const quantityToPlace = import.meta.env.PROD
+        ? liveLotSize
+        : lotsToPlace * instrument.lotSize
 
       const orderData = prepareOrderPayload(
         transactionType,
@@ -182,15 +206,28 @@ export const placeOrder = async (transactionType, drvOptionType) => {
 
     // Find the new position after updating positions
     const newPosition = findNewPosition(selectedStrike.tradingSymbol)
+    scheduleDefaultProtection(selectedStrike.tradingSymbol)
+    let protectionArmed = !((enableStoploss.value || enableTarget.value) && !newPosition)
 
     // If predefined stoploss is enabled, set stoploss for the new position
     if (enableStoploss.value && stoplossValue.value > 0 && newPosition) {
-      setStoploss(newPosition, 'static')
+      protectionArmed = setStoploss(newPosition, 'static') && protectionArmed
+    } else if (enableStoploss.value && newPosition) {
+      protectionArmed = false
     }
 
     // If predefined target is enabled, set target for the new position
     if (enableTarget.value && targetValue.value > 0 && newPosition) {
-      setTarget(newPosition)
+      protectionArmed = setTarget(newPosition) && protectionArmed
+    } else if (enableTarget.value && newPosition) {
+      protectionArmed = false
+    }
+
+    if (!protectionArmed) {
+      toastMessage.value = newPosition
+        ? 'Order accepted, but browser stop-loss/target automation was not armed. Verify the position with Flattrade.'
+        : 'Order accepted; waiting for the Flattrade position before browser stop-loss/target automation can arm.'
+      showToast.value = true
     }
 
     // Update fund limits
@@ -210,7 +247,12 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
   try {
     const quantity = Math.abs(Number(position.netQty || position.netqty))
     const instrument = quantities.value[selectedMasterSymbol.value]
-    const freezeLimit = instrument.freezeLimit * instrument.lotSize
+    const freezeLimit = import.meta.env.PROD
+      ? Number(position.ls)
+      : instrument.freezeLimit * instrument.lotSize
+    if (!Number.isSafeInteger(freezeLimit) || freezeLimit <= 0) {
+      throw new Error('Position lot size is unavailable; close order was not sent')
+    }
 
     if (quantity === 0) {
       console.log('Quantity is zero, no order will be placed.')
