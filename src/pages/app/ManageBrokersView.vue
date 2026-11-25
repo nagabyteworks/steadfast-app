@@ -1,4 +1,5 @@
 <script setup>
+import { isProductionProfile } from '@/config/profile';
 import { onMounted, onUnmounted } from 'vue';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import { checkAllTokens } from '@/composables/useBrokerTokenValidator';
@@ -40,7 +41,7 @@ const {
   generateToken, // Flattrade Token Generation
   handleShoonyaLogin // Shoonya Token Generation
 } = useManageBroker()
-const isProduction = import.meta.env.PROD;
+const isProduction = isProductionProfile;
 
 import {
   copyToClipboard,

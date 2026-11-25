@@ -1,3 +1,4 @@
+import { isProductionProfile } from '@/config/profile'
 import { ref, computed } from 'vue'
 import { validateToken } from '@/composables/useBrokerTokenValidator'
 import { updateSelectedBrokerOnServer } from '../api/broker'
@@ -38,7 +39,7 @@ export const brokerStatus = computed(() => {
   const shoonyaClientId = shoonyaDetails?.clientId
 
   if (selectedBroker.value?.brokerName === 'Flattrade') {
-    if (import.meta.env.PROD) {
+    if (isProductionProfile) {
       if (tokenStatus.Flattrade === 'valid') return 'Connected'
       return tokenStatus.Flattrade === 'invalid' ? 'Token Expired' : 'Not Connected'
     }
@@ -112,7 +113,7 @@ export const setFlattradeCredentials = async () => {
       return
     }
 
-    if (import.meta.env.PROD) {
+    if (isProductionProfile) {
       toastMessage.value = 'Flattrade session is managed by the server'
       showToast.value = true
       return

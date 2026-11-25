@@ -1,3 +1,4 @@
+import { isProductionProfile } from '@/config/profile'
 import { ref } from 'vue'
 import axios from 'axios'
 import qs from 'qs'
@@ -62,7 +63,6 @@ const getCurrentLTP = (optionType) => {
   }
   return price
 }
-
 export const prepareOrderPayload = (
   transactionType,
   drvOptionType,
@@ -124,7 +124,7 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     }
 
     const exchangeSegment = getExchangeSegment()
-    if (import.meta.env.PROD && exchangeSegment !== 'NFO') {
+    if (isProductionProfile && exchangeSegment !== 'NFO') {
       throw new Error('Production orders are limited to NSE derivatives')
     }
 
@@ -137,13 +137,13 @@ export const placeOrder = async (transactionType, drvOptionType) => {
 
     const instrument = quantities.value[selectedMasterSymbol.value]
     const liveLotSize = Number(selectedStrike.lotSize)
-    if (import.meta.env.PROD && (!Number.isSafeInteger(liveLotSize) || liveLotSize <= 0)) {
+    if (isProductionProfile && (!Number.isSafeInteger(liveLotSize) || liveLotSize <= 0)) {
       throw new Error('NSE contract lot size is unavailable; order was not sent')
     }
-    const freezeLimit = import.meta.env.PROD ? 1 : instrument.freezeLimit
-    const orderLots = import.meta.env.PROD ? 1 : selectedLots.value
-    const fullOrderQuantity = import.meta.env.PROD ? liveLotSize : selectedQuantity.value
-    if (import.meta.env.PROD) {
+    const freezeLimit = isProductionProfile ? 1 : instrument.freezeLimit
+    const orderLots = isProductionProfile ? 1 : selectedLots.value
+    const fullOrderQuantity = isProductionProfile ? liveLotSize : selectedQuantity.value
+    if (isProductionProfile) {
       selectedQuantity.value = liveLotSize
     }
 
@@ -151,7 +151,7 @@ export const placeOrder = async (transactionType, drvOptionType) => {
 
     while (remainingLots > 0) {
       const lotsToPlace = Math.min(remainingLots, freezeLimit)
-      const quantityToPlace = import.meta.env.PROD
+      const quantityToPlace = isProductionProfile
         ? liveLotSize
         : lotsToPlace * instrument.lotSize
 
@@ -172,11 +172,11 @@ export const placeOrder = async (transactionType, drvOptionType) => {
       let response
       requestInFlight = true
       if (selectedBroker.value?.brokerName === 'Flattrade') {
-        const FLATTRADE_API_TOKEN = import.meta.env.PROD ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
+        const FLATTRADE_API_TOKEN = isProductionProfile ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
         const payload = qs.stringify(orderData)
         response = await axios.post(`${BASE_URL}/flattrade/placeOrder`, payload, {
           headers: {
-            ...(!import.meta.env.PROD && { Authorization: `Bearer ${FLATTRADE_API_TOKEN}` }),
+            ...(!isProductionProfile && { Authorization: `Bearer ${FLATTRADE_API_TOKEN}` }),
             'Content-Type': 'application/x-www-form-urlencoded'
           }
         })
@@ -272,7 +272,7 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
   try {
     const quantity = Math.abs(Number(position.netQty || position.netqty))
     const instrument = quantities.value[selectedMasterSymbol.value]
-    const freezeLimit = import.meta.env.PROD
+    const freezeLimit = isProductionProfile
       ? Number(position.ls)
       : instrument.freezeLimit * instrument.lotSize
     if (!Number.isSafeInteger(freezeLimit) || freezeLimit <= 0) {
@@ -311,11 +311,11 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
 
       let response
       if (selectedBroker.value?.brokerName === 'Flattrade') {
-        const FLATTRADE_API_TOKEN = import.meta.env.PROD ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
+        const FLATTRADE_API_TOKEN = isProductionProfile ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
         const payload = qs.stringify(orderData)
         response = await axios.post(`${BASE_URL}/flattrade/placeOrder`, payload, {
           headers: {
-            ...(!import.meta.env.PROD && { Authorization: `Bearer ${FLATTRADE_API_TOKEN}` }),
+            ...(!isProductionProfile && { Authorization: `Bearer ${FLATTRADE_API_TOKEN}` }),
             'Content-Type': 'application/x-www-form-urlencoded'
           }
         })
@@ -431,7 +431,7 @@ export const cancelOrder = async (order) => {
   try {
     let response
     if (selectedBroker.value?.brokerName === 'Flattrade') {
-      const jKey = import.meta.env.PROD ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
+      const jKey = isProductionProfile ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
       const clientId = selectedBroker.value.clientId
       console.log(`Sending request to cancel Flattrade order ${orderId}`)
       response = await axios.post(
@@ -441,7 +441,7 @@ export const cancelOrder = async (order) => {
           uid: clientId
         },
         {
-          params: import.meta.env.PROD ? {} : {
+          params: isProductionProfile ? {} : {
             FLATTRADE_API_TOKEN: jKey
           }
         }

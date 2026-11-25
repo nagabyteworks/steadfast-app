@@ -655,6 +655,7 @@
 </template>
 
 <script setup>
+import { isProductionProfile } from '@/config/profile';
 import { computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import BrokerComponent from '@/components/BrokerComponent.vue';
@@ -776,7 +777,7 @@ import {
   totalCapitalPercentage,
 } from '@/composables/usePnlCalculations'
 
-const isProduction = import.meta.env.PROD;
+const isProduction = isProductionProfile;
 const resetExitLocks = () => {
   if (window.confirm('Verify all orders and positions in Flattrade first. Reset automatic-exit locks?')) {
     resetRiskExitLocks();

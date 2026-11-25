@@ -1,9 +1,10 @@
+import { isProductionProfile } from '@/config/profile'
 import axios from 'axios'
 import { logRequestError } from '@/api/requestError'
 import { BASE_URL, tokenStatus, supportedBrokers, productionAccount } from '@/stores/globalStore'
 
 const flattradeFundLimits = async () => {
-  if (import.meta.env.PROD) {
+  if (isProductionProfile) {
     const res = await axios.post(`${BASE_URL}/flattrade/fundLimit`)
     if (res.data?.stat !== 'Ok') throw new Error('Flattrade did not validate the session')
     return res.data
@@ -94,13 +95,13 @@ const validateToken = async (brokerName) => {
 }
 
 const checkAllTokens = async () => {
-  for (const broker of (import.meta.env.PROD ? ['Flattrade'] : supportedBrokers)) {
+  for (const broker of (isProductionProfile ? ['Flattrade'] : supportedBrokers)) {
     await validateToken(broker)
   }
 }
 
 const getBrokerStatus = (brokerName) => {
-  if (import.meta.env.PROD) {
+  if (isProductionProfile) {
     if (brokerName !== 'Flattrade' || !productionAccount.value?.configured) return 'Broker not found'
     return tokenStatus.Flattrade === 'unknown' ? 'Token missing' : tokenStatus.Flattrade
   }

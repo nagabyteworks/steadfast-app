@@ -1,3 +1,4 @@
+import { isProductionProfile } from '@/config/profile'
 import { ref, watch } from 'vue'
 import axios from 'axios'
 import {
@@ -29,7 +30,7 @@ export function useManageBroker() {
   }
 
   const getBrokersFromLocalStorage = () => {
-    if (import.meta.env.PROD) {
+    if (isProductionProfile) {
       return getAllBrokersFromLocalStorage().map((broker) => ({
         ...broker,
         id: broker.clientId
@@ -79,7 +80,7 @@ export function useManageBroker() {
     statusMessage.value = 'Waiting for broker auth to complete...'
     localStorage.setItem('statusMessage', statusMessage.value)
 
-    if (import.meta.env.PROD) {
+    if (isProductionProfile) {
       if (!window.open(`${BASE_URL}/flattrade/auth`, '_blank')) {
         errorMessage.value = 'Unable to open the broker login window. Check your popup settings.'
         clearErrorMessage()
@@ -117,7 +118,7 @@ export function useManageBroker() {
     if (newCode && userTriggeredTokenGeneration.value) {
       statusMessage.value = 'Received Flattrade authorization code'
 
-      if (import.meta.env.PROD) {
+      if (isProductionProfile) {
         try {
           await axios.post(`${BASE_URL}/flattrade/generateToken`, { request_code: newCode })
           await validateToken('Flattrade')
@@ -171,7 +172,7 @@ export function useManageBroker() {
       }
 
       try {
-        const apiUrl = import.meta.env.PROD
+        const apiUrl = isProductionProfile
           ? `${BASE_URL}/flattrade/generateToken`
           : `${BASE_URL}/flattrade/generateToken`
         const res = await axios.post(apiUrl, payload)
@@ -200,7 +201,7 @@ export function useManageBroker() {
 
   // Watch for changes in FLATTRADE_API_TOKEN and update localStorage
   watch(FLATTRADE_API_TOKEN, (newToken) => {
-    if (import.meta.env.PROD) return
+    if (isProductionProfile) return
     if (newToken) {
       localStorage.setItem('FLATTRADE_API_TOKEN', newToken)
       validateToken('Flattrade')
@@ -260,7 +261,7 @@ export function useManageBroker() {
       const jDataString = JSON.stringify(jData)
       const payload = `jData=${jDataString}&jKey=${apiKey}`
 
-      const apiUrl = import.meta.env.PROD
+      const apiUrl = isProductionProfile
         ? `${BASE_URL}/shoonya/login`
         : `${BASE_URL}/shoonya/login`
 

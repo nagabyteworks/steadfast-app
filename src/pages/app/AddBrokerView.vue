@@ -74,12 +74,13 @@
 </template>
 
 <script setup>
+import { isProductionProfile } from '@/config/profile';
 import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import { supportedBrokers } from '@/stores/globalStore';
 const router = useRouter();
-const isProduction = import.meta.env.PROD;
+const isProduction = isProductionProfile;
 const redirectURL = computed(() => {
   const baseUrl = import.meta.env.DEV ? 'http://localhost:5173' : import.meta.env.VITE_BASE_URL;
   return `${baseUrl}/${selectedBroker.value.toLowerCase()}/redirect?`;

@@ -5,7 +5,21 @@ import vue from '@vitejs/plugin-vue'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  if (mode === 'production') {
+  const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
+  const rootEnv = loadEnv(mode, repositoryRoot, '')
+  const profile = (
+    process.env.PROFILE ||
+    process.env.profile ||
+    rootEnv.PROFILE ||
+    rootEnv.profile ||
+    'prod'
+  ).toLowerCase()
+
+  if (!['dev', 'prod'].includes(profile)) {
+    throw new Error('profile must be dev or prod')
+  }
+
+  if (profile === 'prod' && mode === 'production') {
     const baseUrl = loadEnv(mode, process.cwd(), 'VITE_').VITE_BASE_URL
     let url
     try {
@@ -20,6 +34,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: '/',
+    define: {
+      'import.meta.env.VITE_PROFILE': JSON.stringify(profile)
+    },
     plugins: [vue()],
     resolve: {
       alias: {

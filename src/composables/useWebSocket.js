@@ -1,4 +1,5 @@
 import { markRaw } from 'vue'
+import { isProductionProfile } from '@/config/profile'
 
 import {
   socket,
@@ -98,7 +99,7 @@ export const disconnectWebSocket = () => {
 }
 
 export const connectWebSocket = () => {
-  const isDev = import.meta.env.DEV
+  const isDev = !isProductionProfile
   const wsBaseUrl = isDev
     ? 'ws://localhost'
     : import.meta.env.VITE_BASE_URL.replace('http', 'ws').replace('https', 'wss')

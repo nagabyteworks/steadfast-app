@@ -8,12 +8,19 @@ afterEach(() => vi.unstubAllEnvs())
 
 describe('production configuration', () => {
   it('requires an HTTPS API origin without a path', () => {
+    vi.stubEnv('profile', 'prod')
     for (const baseUrl of ['', 'http://example.com', 'https://example.com/api']) {
       vi.stubEnv('VITE_BASE_URL', baseUrl)
       expect(() => viteConfig(production)).toThrow('VITE_BASE_URL')
     }
     vi.stubEnv('VITE_BASE_URL', 'https://trade.example.com')
     expect(() => viteConfig(production)).not.toThrow()
+  })
+
+  it('uses the development profile even for a production build', () => {
+    vi.stubEnv('profile', 'dev')
+    const config = viteConfig(production)
+    expect(config.define['import.meta.env.VITE_PROFILE']).toBe('"dev"')
   })
 
   it('routes broker proxy traffic through the local API', () => {

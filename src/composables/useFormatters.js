@@ -1,3 +1,4 @@
+import { isProductionProfile } from '@/config/profile'
 import { ref } from 'vue'
 import { dataFetched, selectedBroker, productionAccount } from '@/stores/globalStore'
 
@@ -18,7 +19,7 @@ export const getAllBrokersFromLocalStorage = () => {
       const brokerData = JSON.parse(localStorage.getItem(key))
       return { ...brokerData, brokerName, clientId }
     })
-    .filter((broker) => !import.meta.env.PROD ||
+    .filter((broker) => !isProductionProfile ||
       (broker.brokerName === 'Flattrade' && broker.clientId === productionAccount.value?.clientId))
 }
 

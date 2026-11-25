@@ -5,13 +5,14 @@ import App from './App.vue'
 import router from './router'
 import { FontAwesomeIcon } from './font-awesome'
 import { initializeProductionAccount } from './api/productionAccount'
+import { isProductionProfile } from './config/profile'
 
 const app = createApp(App)
 
 app.component('font-awesome-icon', FontAwesomeIcon)
 app.use(router)
 
-if (import.meta.env.PROD) {
+if (isProductionProfile) {
   initializeProductionAccount()
     .then(() => app.mount('#app'), (error) => {
       console.error('Unable to migrate saved broker settings:', error.message)
