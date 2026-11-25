@@ -1,4 +1,4 @@
-import { isProductionProfile } from '@/config/profile'
+import { usesServerManagedAccount } from '@/config/profile'
 import { ref, computed, watch } from 'vue'
 import { debounce } from 'lodash'
 import { getBrokerStatus } from '@/composables/useBrokerTokenValidator'
@@ -189,7 +189,7 @@ export const todayExpirySymbol = computed(() => {
 })
 
 export const maxLots = computed(() => {
-  if (isProductionProfile) return 1
+  if (usesServerManagedAccount) return 1
   const instrument = quantities.value[selectedMasterSymbol.value]
   return instrument ? instrument.maxLots : 280
 })

@@ -8,8 +8,8 @@
   <!-- Place Order Form -->
   <section class="row mt-2">
     <form @submit.prevent>
-      <div v-if="isProduction" class="alert alert-danger">
-        Production orders may place live NSE derivatives trades and are limited to one contract lot each.
+      <div v-if="isServerManaged" class="alert alert-danger">
+        Server-managed orders place live NSE derivatives trades and are limited to one contract lot each.
         Stop-loss/target automation runs in this browser only; keep this page and its market-data connection active.
         If both protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured.
         After an automatic exit attempt, verify orders and positions with Flattrade before resetting its safety lock.
@@ -655,7 +655,7 @@
 </template>
 
 <script setup>
-import { isProductionProfile } from '@/config/profile';
+import { usesServerManagedAccount } from '@/config/profile';
 import { computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import BrokerComponent from '@/components/BrokerComponent.vue';
@@ -777,7 +777,7 @@ import {
   totalCapitalPercentage,
 } from '@/composables/usePnlCalculations'
 
-const isProduction = isProductionProfile;
+const isServerManaged = usesServerManagedAccount;
 const resetExitLocks = () => {
   if (window.confirm('Verify all orders and positions in Flattrade first. Reset automatic-exit locks?')) {
     resetRiskExitLocks();
@@ -835,14 +835,14 @@ onMounted(async () => {
   const storedBroker = localStorage.getItem('selectedBroker');
   if (storedBroker) {
     const brokerDetails = JSON.parse(storedBroker);
-    const availableBroker = isProduction
+    const availableBroker = isServerManaged
       ? availableBrokers.value.find((broker) =>
         broker.brokerName === brokerDetails.brokerName && broker.clientId === brokerDetails.clientId)
       : brokerDetails;
     if (availableBroker) {
       selectedBroker.value = availableBroker;
       selectedBrokerName.value = availableBroker.brokerName;
-      if (isProduction && brokerStatus.value === 'Connected') {
+      if (isServerManaged && brokerStatus.value === 'Connected') {
         try {
           await updateSelectedBrokerOnServer(availableBroker.brokerName.toLowerCase());
         } catch (error) {
@@ -867,7 +867,7 @@ onMounted(async () => {
     updateExchangeSymbols();
     setDefaultExchangeAndMasterSymbol();
     updateSymbolData(selectedMasterSymbol.value);
-    if (isProduction) {
+    if (isServerManaged) {
       await fetchTradingData();
     }
   } else {

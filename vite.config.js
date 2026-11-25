@@ -14,9 +14,26 @@ export default defineConfig(({ mode }) => {
     rootEnv.profile ||
     'prod'
   ).toLowerCase()
+  const flattradeCredentialNames = [
+    'FLATTRADE_CLIENT_ID',
+    'FLATTRADE_API_KEY',
+    'FLATTRADE_API_SECRET'
+  ]
+  const configuredFlattradeCredentials = flattradeCredentialNames.map((name) =>
+    process.env[name] || rootEnv[name]
+  )
+  const hasSomeFlattradeCredentials = configuredFlattradeCredentials.some(Boolean)
+  const hasFlattradeCredentials = configuredFlattradeCredentials.every(Boolean)
+  const tradingEnabled = process.env.TRADING_ENABLED || rootEnv.TRADING_ENABLED
 
   if (!['dev', 'prod'].includes(profile)) {
     throw new Error('profile must be dev or prod')
+  }
+  if (mode !== 'test' && profile === 'dev' && hasSomeFlattradeCredentials && !hasFlattradeCredentials) {
+    throw new Error('Configure FLATTRADE_CLIENT_ID, FLATTRADE_API_KEY, and FLATTRADE_API_SECRET together')
+  }
+  if (mode !== 'test' && profile === 'dev' && tradingEnabled === 'true' && !hasFlattradeCredentials) {
+    throw new Error('TRADING_ENABLED=true requires complete server-managed Flattrade credentials')
   }
 
   if (profile === 'prod' && mode === 'production') {
@@ -35,7 +52,10 @@ export default defineConfig(({ mode }) => {
   return {
     base: '/',
     define: {
-      'import.meta.env.VITE_PROFILE': JSON.stringify(profile)
+      'import.meta.env.VITE_PROFILE': JSON.stringify(profile),
+      'import.meta.env.VITE_SERVER_MANAGED_ACCOUNT': JSON.stringify(
+        String(profile === 'prod' || hasFlattradeCredentials)
+      )
     },
     plugins: [vue()],
     resolve: {

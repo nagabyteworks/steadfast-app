@@ -1,4 +1,4 @@
-import { isProductionProfile } from '@/config/profile'
+import { usesServerManagedAccount } from '@/config/profile'
 import { ref, watch } from 'vue'
 import axios from 'axios'
 import {
@@ -30,7 +30,7 @@ export function useManageBroker() {
   }
 
   const getBrokersFromLocalStorage = () => {
-    if (isProductionProfile) {
+    if (usesServerManagedAccount) {
       return getAllBrokersFromLocalStorage().map((broker) => ({
         ...broker,
         id: broker.clientId
@@ -80,7 +80,7 @@ export function useManageBroker() {
     statusMessage.value = 'Waiting for broker auth to complete...'
     localStorage.setItem('statusMessage', statusMessage.value)
 
-    if (isProductionProfile) {
+    if (usesServerManagedAccount) {
       if (!window.open(`${BASE_URL}/flattrade/auth`, '_blank')) {
         errorMessage.value = 'Unable to open the broker login window. Check your popup settings.'
         clearErrorMessage()
@@ -118,7 +118,7 @@ export function useManageBroker() {
     if (newCode && userTriggeredTokenGeneration.value) {
       statusMessage.value = 'Received Flattrade authorization code'
 
-      if (isProductionProfile) {
+      if (usesServerManagedAccount) {
         try {
           await axios.post(`${BASE_URL}/flattrade/generateToken`, { request_code: newCode })
           await validateToken('Flattrade')
@@ -172,10 +172,7 @@ export function useManageBroker() {
       }
 
       try {
-        const apiUrl = isProductionProfile
-          ? `${BASE_URL}/flattrade/generateToken`
-          : `${BASE_URL}/flattrade/generateToken`
-        const res = await axios.post(apiUrl, payload)
+        const res = await axios.post(`${BASE_URL}/flattrade/generateToken`, payload)
         const token = res.data.token
         if (!token) {
           errorMessage.value = 'Token generation failed'
@@ -201,7 +198,7 @@ export function useManageBroker() {
 
   // Watch for changes in FLATTRADE_API_TOKEN and update localStorage
   watch(FLATTRADE_API_TOKEN, (newToken) => {
-    if (isProductionProfile) return
+    if (usesServerManagedAccount) return
     if (newToken) {
       localStorage.setItem('FLATTRADE_API_TOKEN', newToken)
       validateToken('Flattrade')
@@ -261,7 +258,6 @@ export function useManageBroker() {
       const jDataString = JSON.stringify(jData)
       const payload = `jData=${jDataString}&jKey=${apiKey}`
 
-      const apiUrl = isProductionProfile
         ? `${BASE_URL}/shoonya/login`
         : `${BASE_URL}/shoonya/login`
 

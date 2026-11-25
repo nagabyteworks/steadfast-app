@@ -1,4 +1,4 @@
-import { isProductionProfile } from '@/config/profile'
+import { usesServerManagedAccount } from '@/config/profile'
 import { selectedBroker } from '@/stores/globalStore'
 import axios from 'axios'
 import { logRequestError } from '@/api/requestError'
@@ -46,12 +46,12 @@ export const fetchFundLimit = async () => {
 
     let response
     if (selectedBroker.value?.brokerName === 'Flattrade') {
-      const FLATTRADE_API_TOKEN = isProductionProfile ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
-      if (!isProductionProfile && !FLATTRADE_API_TOKEN) {
+      const FLATTRADE_API_TOKEN = usesServerManagedAccount ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
+      if (!usesServerManagedAccount && !FLATTRADE_API_TOKEN) {
         throw new Error('Flattrade API Token is missing')
       }
       response = await axios.post(`${BASE_URL}/flattrade/fundLimit`, null, {
-        params: isProductionProfile ? {} : {
+        params: usesServerManagedAccount ? {} : {
           FLATTRADE_API_TOKEN,
           FLATTRADE_CLIENT_ID: selectedBroker.value.clientId
         }
@@ -89,7 +89,7 @@ export const fetchFundLimit = async () => {
 }
 
 export const fetchFlattradeOrdersTradesBook = async () => {
-  const jKey = isProductionProfile ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
+  const jKey = usesServerManagedAccount ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
 
   if (!selectedBroker.value || selectedBroker.value?.brokerName !== 'Flattrade') {
     toastMessage.value = 'Flattrade broker is not selected.'
@@ -99,7 +99,7 @@ export const fetchFlattradeOrdersTradesBook = async () => {
 
   const clientId = selectedBroker.value.clientId
 
-  if ((!isProductionProfile && !jKey) || !clientId) {
+  if ((!usesServerManagedAccount && !jKey) || !clientId) {
     toastMessage.value = 'Token or Client ID is missing. Please generate a token first.'
     showToast.value = true
     return
@@ -107,7 +107,7 @@ export const fetchFlattradeOrdersTradesBook = async () => {
 
   try {
     const response = await axios.get(`${BASE_URL}/flattrade/getOrdersAndTrades`, {
-      params: isProductionProfile ? {} : {
+      params: usesServerManagedAccount ? {} : {
         FLATTRADE_API_TOKEN: jKey,
         FLATTRADE_CLIENT_ID: clientId
       }
@@ -169,9 +169,9 @@ export const updatePositionSecurityIds = () => {
   )
 }
 export const fetchFlattradePositions = async () => {
-  const jKey = isProductionProfile ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
+  const jKey = usesServerManagedAccount ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
 
-  if (!isProductionProfile && !jKey) {
+  if (!usesServerManagedAccount && !jKey) {
     toastMessage.value = 'Token is missing. Please generate a token first.'
     showToast.value = true
     flattradePositionsStale.value = true
@@ -190,7 +190,7 @@ export const fetchFlattradePositions = async () => {
   const positionBookPayload = `jKey=${jKey}&jData=${JSON.stringify({ uid: clientId, actid: clientId })}`
 
   try {
-    const positionBookRes = isProductionProfile
+    const positionBookRes = usesServerManagedAccount
       ? await axios.get(`${BASE_URL}/flattrade/positions`)
       : await axios.post('https://piconnect.flattrade.in/PiConnectAPI/PositionBook', positionBookPayload, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }

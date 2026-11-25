@@ -1,5 +1,5 @@
 <script setup>
-import { isProductionProfile } from '@/config/profile';
+import { usesServerManagedAccount } from '@/config/profile';
 import { onMounted, onUnmounted } from 'vue';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import { checkAllTokens } from '@/composables/useBrokerTokenValidator';
@@ -41,7 +41,7 @@ const {
   generateToken, // Flattrade Token Generation
   handleShoonyaLogin // Shoonya Token Generation
 } = useManageBroker()
-const isProduction = isProductionProfile;
+const isServerManaged = usesServerManagedAccount;
 
 import {
   copyToClipboard,
@@ -59,7 +59,7 @@ onMounted(() => {
   brokerDetails.value = getBrokersFromLocalStorage()
 
   // Retrieve broker details for each supported broker
-  for (const broker of (isProduction ? [] : supportedBrokers)) {
+  for (const broker of (isServerManaged ? [] : supportedBrokers)) {
     if (broker === 'Flattrade') {
       const flattradeDetails = JSON.parse(localStorage.getItem('broker_Flattrade') || '{}');
       FLATTRADE_API_KEY.value = flattradeDetails.apiKey || '';
@@ -99,7 +99,7 @@ onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
 
   <section class="row pt-5 pb-3">
     <div class="col-8 text-start">
-      <RouterLink v-if="!isProduction" to="/add-broker">
+      <RouterLink v-if="!isServerManaged" to="/add-broker">
         <button class="btn btn-outline btn-sm">Add New Broker</button>
       </RouterLink>
     </div>
@@ -115,12 +115,12 @@ onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
           <tr>
             <th scope="col">Broker</th>
             <th scope="col">Broker Client ID</th>
-            <th v-if="!isProduction" scope="col">API Key</th>
-            <th v-if="!isProduction" scope="col">API Token</th>
+            <th v-if="!isServerManaged" scope="col">API Key</th>
+            <th v-if="!isServerManaged" scope="col">API Token</th>
             <th scope="col">Validity</th>
             <th scope="col" class="text-center">Activation</th>
             <th scope="col">Status</th>
-            <th v-if="!isProduction" scope="col">Delete</th>
+            <th v-if="!isServerManaged" scope="col">Delete</th>
           </tr>
         </thead>
         <tbody>
@@ -137,8 +137,8 @@ onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
                 {{ visibleClientIds[broker.id] ? '👁️' : '👀' }}
               </button>
             </td>
-            <td v-if="!isProduction">{{ maskTokenSecret(broker.apiKey) }}</td>
-            <td v-if="!isProduction">
+            <td v-if="!isServerManaged">{{ maskTokenSecret(broker.apiKey) }}</td>
+            <td v-if="!isServerManaged">
               <div class="d-flex align-items-center">
                 <span>
                   {{ maskTokenSecret(broker.apiToken || '-') }}
@@ -168,7 +168,7 @@ onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
             <td>
               <span :class="`badge ${getStatus(broker).statusClass}`">{{ getStatus(broker).status }}</span>
             </td>
-            <td v-if="!isProduction">
+            <td v-if="!isServerManaged">
               <button class="btn btn-outline-danger btn-sm" data-bs-toggle="modal"
                 data-bs-target="#DeleteBrokerConfirmationModal" @click="selectedBrokerToDelete = broker">
                 🗑️
@@ -189,7 +189,7 @@ onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
 
   <!-- Shoonya Login -->
   <div
-    v-if="!isProduction"
+    v-if="!isServerManaged"
     class="modal fade"
     id="ShoonyaLogin"
     tabindex="-1"
@@ -242,7 +242,7 @@ onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
 
   <!-- Update Token -->
   <div
-    v-if="!isProduction"
+    v-if="!isServerManaged"
     class="modal fade"
     id="UpdateToken"
     tabindex="-1"
@@ -277,7 +277,7 @@ onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
 
   <!-- Delete Broker Confirmation Modal -->
   <div
-    v-if="!isProduction"
+    v-if="!isServerManaged"
     class="modal fade"
     id="DeleteBrokerConfirmationModal"
     tabindex="-1"

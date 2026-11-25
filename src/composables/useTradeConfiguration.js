@@ -1,4 +1,4 @@
-import { isProductionProfile } from '@/config/profile'
+import { usesServerManagedAccount } from '@/config/profile'
 import { ref, computed } from 'vue'
 
 import {
@@ -57,9 +57,9 @@ export const getExchangeSegment = () => {
 }
 
 export const selectedLots = computed({
-  get: () => isProductionProfile ? 1 : lotsPerSymbol.value[selectedMasterSymbol.value] || 1,
+  get: () => usesServerManagedAccount ? 1 : lotsPerSymbol.value[selectedMasterSymbol.value] || 1,
   set: (value) => {
-    lotsPerSymbol.value[selectedMasterSymbol.value] = isProductionProfile ? 1 : value
+    lotsPerSymbol.value[selectedMasterSymbol.value] = usesServerManagedAccount ? 1 : value
     saveLots()
   }
 })
@@ -94,7 +94,7 @@ export const productTypes = computed(() => {
 export const updateAvailableQuantities = () => {
   const instrument = quantities.value[selectedMasterSymbol.value]
   if (instrument) {
-    const maxLots = isProductionProfile ? 1 : instrument.maxLots
+    const maxLots = usesServerManagedAccount ? 1 : instrument.maxLots
     availableQuantities.value = Array.from({ length: maxLots }, (_, i) => ({
       lots: i + 1,
       quantity: (i + 1) * instrument.lotSize
@@ -143,7 +143,7 @@ export const loadLots = () => {
 export const updateSelectedQuantity = () => {
   const instrument = quantities.value[selectedMasterSymbol.value]
   if (instrument) {
-    const maxLots = isProductionProfile ? 1 : instrument.maxLots
+    const maxLots = usesServerManagedAccount ? 1 : instrument.maxLots
     const lots = Math.min(Math.max(1, selectedLots.value), maxLots)
     lotsPerSymbol.value[selectedMasterSymbol.value] = lots
     selectedQuantity.value = lots * instrument.lotSize

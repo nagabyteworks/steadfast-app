@@ -1,4 +1,4 @@
-import { isProductionProfile } from '@/config/profile'
+import { usesServerManagedAccount } from '@/config/profile'
 import { ref, computed } from 'vue'
 import { validateToken } from '@/composables/useBrokerTokenValidator'
 import { updateSelectedBrokerOnServer } from '../api/broker'
@@ -39,7 +39,7 @@ export const brokerStatus = computed(() => {
   const shoonyaClientId = shoonyaDetails?.clientId
 
   if (selectedBroker.value?.brokerName === 'Flattrade') {
-    if (isProductionProfile) {
+    if (usesServerManagedAccount) {
       if (tokenStatus.Flattrade === 'valid') return 'Connected'
       return tokenStatus.Flattrade === 'invalid' ? 'Token Expired' : 'Not Connected'
     }
@@ -113,7 +113,7 @@ export const setFlattradeCredentials = async () => {
       return
     }
 
-    if (isProductionProfile) {
+    if (usesServerManagedAccount) {
       toastMessage.value = 'Flattrade session is managed by the server'
       showToast.value = true
       return

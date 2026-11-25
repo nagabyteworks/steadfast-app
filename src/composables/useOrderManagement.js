@@ -1,4 +1,4 @@
-import { isProductionProfile } from '@/config/profile'
+import { usesServerManagedAccount } from '@/config/profile'
 import { ref } from 'vue'
 import axios from 'axios'
 import qs from 'qs'
@@ -124,8 +124,8 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     }
 
     const exchangeSegment = getExchangeSegment()
-    if (isProductionProfile && exchangeSegment !== 'NFO') {
-      throw new Error('Production orders are limited to NSE derivatives')
+    if (usesServerManagedAccount && exchangeSegment !== 'NFO') {
+      throw new Error('Server-managed live orders are limited to NSE derivatives')
     }
 
     if (enableStoploss.value && (!Number.isFinite(Number(stoplossValue.value)) || Number(stoplossValue.value) <= 0)) {
@@ -137,13 +137,13 @@ export const placeOrder = async (transactionType, drvOptionType) => {
 
     const instrument = quantities.value[selectedMasterSymbol.value]
     const liveLotSize = Number(selectedStrike.lotSize)
-    if (isProductionProfile && (!Number.isSafeInteger(liveLotSize) || liveLotSize <= 0)) {
+    if (usesServerManagedAccount && (!Number.isSafeInteger(liveLotSize) || liveLotSize <= 0)) {
       throw new Error('NSE contract lot size is unavailable; order was not sent')
     }
-    const freezeLimit = isProductionProfile ? 1 : instrument.freezeLimit
-    const orderLots = isProductionProfile ? 1 : selectedLots.value
-    const fullOrderQuantity = isProductionProfile ? liveLotSize : selectedQuantity.value
-    if (isProductionProfile) {
+    const freezeLimit = usesServerManagedAccount ? 1 : instrument.freezeLimit
+    const orderLots = usesServerManagedAccount ? 1 : selectedLots.value
+    const fullOrderQuantity = usesServerManagedAccount ? liveLotSize : selectedQuantity.value
+    if (usesServerManagedAccount) {
       selectedQuantity.value = liveLotSize
     }
 
@@ -151,7 +151,7 @@ export const placeOrder = async (transactionType, drvOptionType) => {
 
     while (remainingLots > 0) {
       const lotsToPlace = Math.min(remainingLots, freezeLimit)
-      const quantityToPlace = isProductionProfile
+      const quantityToPlace = usesServerManagedAccount
         ? liveLotSize
         : lotsToPlace * instrument.lotSize
 
@@ -172,11 +172,11 @@ export const placeOrder = async (transactionType, drvOptionType) => {
       let response
       requestInFlight = true
       if (selectedBroker.value?.brokerName === 'Flattrade') {
-        const FLATTRADE_API_TOKEN = isProductionProfile ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
+        const FLATTRADE_API_TOKEN = usesServerManagedAccount ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
         const payload = qs.stringify(orderData)
         response = await axios.post(`${BASE_URL}/flattrade/placeOrder`, payload, {
           headers: {
-            ...(!isProductionProfile && { Authorization: `Bearer ${FLATTRADE_API_TOKEN}` }),
+            ...(!usesServerManagedAccount && { Authorization: `Bearer ${FLATTRADE_API_TOKEN}` }),
             'Content-Type': 'application/x-www-form-urlencoded'
           }
         })
@@ -272,7 +272,7 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
   try {
     const quantity = Math.abs(Number(position.netQty || position.netqty))
     const instrument = quantities.value[selectedMasterSymbol.value]
-    const freezeLimit = isProductionProfile
+    const freezeLimit = usesServerManagedAccount
       ? Number(position.ls)
       : instrument.freezeLimit * instrument.lotSize
     if (!Number.isSafeInteger(freezeLimit) || freezeLimit <= 0) {
@@ -311,11 +311,11 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
 
       let response
       if (selectedBroker.value?.brokerName === 'Flattrade') {
-        const FLATTRADE_API_TOKEN = isProductionProfile ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
+        const FLATTRADE_API_TOKEN = usesServerManagedAccount ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
         const payload = qs.stringify(orderData)
         response = await axios.post(`${BASE_URL}/flattrade/placeOrder`, payload, {
           headers: {
-            ...(!isProductionProfile && { Authorization: `Bearer ${FLATTRADE_API_TOKEN}` }),
+            ...(!usesServerManagedAccount && { Authorization: `Bearer ${FLATTRADE_API_TOKEN}` }),
             'Content-Type': 'application/x-www-form-urlencoded'
           }
         })
@@ -431,7 +431,7 @@ export const cancelOrder = async (order) => {
   try {
     let response
     if (selectedBroker.value?.brokerName === 'Flattrade') {
-      const jKey = isProductionProfile ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
+      const jKey = usesServerManagedAccount ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
       const clientId = selectedBroker.value.clientId
       console.log(`Sending request to cancel Flattrade order ${orderId}`)
       response = await axios.post(
@@ -441,7 +441,7 @@ export const cancelOrder = async (order) => {
           uid: clientId
         },
         {
-          params: isProductionProfile ? {} : {
+          params: usesServerManagedAccount ? {} : {
             FLATTRADE_API_TOKEN: jKey
           }
         }
