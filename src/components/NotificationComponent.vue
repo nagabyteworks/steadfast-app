@@ -1,5 +1,5 @@
 <template>
-    <div class="notification-container d-flex align-items-center position-relative">
+    <div class="notification-container d-flex align-items-center position-relative flex-grow-1">
         <button type="button" class="notification-icon me-2 btn btn-link p-0 position-relative border-0"
             :class="{ 'has-notification': showToast }" aria-label="Notices" @click="open = !open">
             <font-awesome-icon icon="bell" />
@@ -10,7 +10,7 @@
         <div v-if="open && systemNotices.length" class="notice-panel shadow border rounded p-2">
             <div v-for="notice in systemNotices" :key="notice" class="small mb-2">{{ notice }}</div>
         </div>
-        <div class="notification-message" :class="{ 'show-message': showToast }">
+        <div class="notification-message text-truncate" :class="{ 'show-message': showToast }">
             {{ message || 'No new notifications' }}
         </div>
     </div>
@@ -84,6 +84,7 @@ const clearNotification = () => {
 </script>
 
 <style scoped>
+.notification-container { min-width: 0; }
 .notice-badge { position: absolute; top: -6px; right: -10px; font-size: 0.6rem; }
 .notice-panel {
     position: absolute; top: 100%; right: 0; z-index: 1050; width: 22rem; max-width: 90vw;

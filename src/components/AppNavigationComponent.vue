@@ -18,7 +18,7 @@
           <font-awesome-icon icon="bars" class="text-color" />
         </button>
         <!-- Always-on Notification Area -->
-        <div class="notification-area d-flex align-items-center ms-3 d-lg-none">
+        <div class="notification-area mobile-notification-area d-flex flex-nowrap align-items-center ms-2 d-lg-none">
           <AccountRefreshButton class="refresh-separator" />
           <NotificationComponent
             v-model:showToast="showToast"
@@ -182,5 +182,16 @@ const router = useRouter()
   margin-right: 1.25rem;
   padding-right: 1.25rem;
   border-right: 1px solid rgba(128, 128, 128, 0.4);
+}
+@media (max-width: 991.98px) {
+  .refresh-separator {
+    margin-right: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  .mobile-notification-area {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.35rem 0.6rem;
+  }
 }
 </style>

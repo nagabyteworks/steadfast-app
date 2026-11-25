@@ -167,18 +167,18 @@
                 </select>
                 <div class="text-muted" v-if="showStrikeDetails">Security ID: {{ selectedCallStrike.securityId }}</div>
               </div>
-              <div class="col-12 mt-2 d-flex align-items-center justify-content-between">
+              <div class="col-12 mt-2 d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between">
                 <span>
                   <span>LTP: </span>
-                  <span class="ms-2 fw-bold" :class="{
+                  <span class="ms-md-2 fw-bold" :class="{
                     'text-success': parseFloat(latestCallLTP) > parseFloat(callOpenPrice),
                     'text-danger': parseFloat(latestCallLTP) < parseFloat(callOpenPrice)
                   }">{{ formatPrice(latestCallLTP) }}
                   </span>
-                  <small v-if="callPercentChange !== null" class="ms-1" :class="callPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(callPercentChange) }})</small>
+                  <small v-if="callPercentChange !== null" class="d-block d-md-inline ms-md-1" :class="callPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(callPercentChange) }})</small>
                 </span>
 
-                <span class="ms-2 fw-bold text-secondary">
+                <span class="ms-md-2 fw-bold text-secondary">
                   ₹{{ formatPrice(parseFloat(latestCallLTP) * selectedQuantity) }}
                 </span>
               </div>
@@ -278,18 +278,18 @@
                 </span>
                 <div class="text-muted" v-if="showStrikeDetails">Security ID: {{ selectedPutStrike.securityId }}</div>
               </div>
-              <div class="col-12 mt-2 d-flex align-items-center justify-content-between">
-                <span class="ms-2 fw-bold text-secondary">
+              <div class="col-12 mt-2 d-flex flex-column-reverse flex-md-row align-items-start align-items-md-center justify-content-between">
+                <span class="ms-md-2 fw-bold text-secondary">
                   ₹{{ formatPrice(parseFloat(latestPutLTP) * selectedQuantity) }}
                 </span>
                 <span>
                   <span>LTP: </span>
-                  <span class="ms-2 fw-bold" :class="{
+                  <span class="ms-md-2 fw-bold" :class="{
                     'text-success': parseFloat(latestPutLTP) > parseFloat(putOpenPrice),
                     'text-danger': parseFloat(latestPutLTP) < parseFloat(putOpenPrice)
                   }">{{ formatPrice(latestPutLTP) }}
                   </span>
-                  <small v-if="putPercentChange !== null" class="ms-1" :class="putPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(putPercentChange) }})</small>
+                  <small v-if="putPercentChange !== null" class="d-block d-md-inline ms-md-1" :class="putPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(putPercentChange) }})</small>
                 </span>
               </div>
             </div>

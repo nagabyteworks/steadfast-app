@@ -185,51 +185,55 @@
                     </div>
                 </div>
 
-                <!-- SL & TSL -->
-                <div v-if="position.netqty != 0" class="mb-2">
+                <!-- SL, TSL & Target -->
+                <div v-if="position.netqty != 0" class="d-flex flex-wrap align-items-center gap-2 mb-2">
                     <div v-if="trailingStoplosses[position.tsym] !== null" class="d-flex align-items-center">
-                        <span class="me-1 small">TSL:</span>
-                        <span class="bg-danger text-white px-2 py-1 rounded">
-                            {{ trailingStoplosses[position.tsym] }}
-                        </span>
+                        <span class="me-1 small">TSL</span>
+                        <div class="btn-group btn-group-sm">
+                            <EditableRiskValue :value="trailingStoplosses[position.tsym]"
+                                bgClass="bg-danger text-white rounded"
+                                @commit="(price) => $emit('edit-stoploss', position, price)" />
+                        </div>
                     </div>
                     <div v-else-if="stoplosses[position.tsym] !== null" class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-danger" @click="$emit('decrease-stoploss', position)">-</button>
-                        <span class="btn btn-danger">{{ stoplosses[position.tsym] }}</span>
-                        <button class="btn btn-outline-danger" @click="$emit('increase-stoploss', position)">+</button>
+                        <button class="btn btn-outline-danger btn-xs" @click="$emit('decrease-stoploss', position)">-</button>
+                        <EditableRiskValue :value="stoplosses[position.tsym]"
+                            @commit="(price) => $emit('edit-stoploss', position, price)" />
+                        <button class="btn btn-outline-danger btn-xs" @click="$emit('increase-stoploss', position)">+</button>
                     </div>
-                    <div v-else class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-danger" @click="$emit('set-stoploss', position, 'static')">Set
-                            SL</button>
-                    </div>
-                </div>
-
-                <!-- Target -->
-                <div v-if="position.netqty != 0" class="mb-2">
-                    <div v-if="targets[position.tsym] !== null" class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-success" @click="$emit('decrease-target', position)">-</button>
-                        <span class="btn btn-success">{{ targets[position.tsym] }}</span>
-                        <button class="btn btn-outline-success" @click="$emit('increase-target', position)">+</button>
-                    </div>
-                    <div v-else class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-success" @click="$emit('set-target', position)">Set
-                            Target</button>
-                    </div>
-                </div>
-
-                <!-- SL/TSL/Target Management -->
-                <div v-if="position.netqty != 0" class="btn-group btn-group-sm" role="group">
-                    <button class="btn btn-outline-secondary"
-                        v-if="trailingStoplosses[position.tsym] !== null || stoplosses[position.tsym] !== null"
-                        @click="$emit('set-stoploss', position, trailingStoplosses[position.tsym] !== null ? 'convert_to_sl' : 'convert_to_tsl')">
-                        {{ trailingStoplosses[position.tsym] !== null ? 'Convert to SL' : 'Convert to TSL' }}
+                    <button v-else class="btn btn-outline-danger btn-sm" @click="$emit('set-stoploss', position, 'static')">
+                        Set SL
                     </button>
-                    <button class="btn btn-outline-secondary"
+
+                    <div v-if="targets[position.tsym] !== null" class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-success btn-xs" @click="$emit('decrease-target', position)">-</button>
+                        <EditableRiskValue :value="targets[position.tsym]" bgClass="bg-success text-white"
+                            @commit="(price) => $emit('edit-target', position, price)" />
+                        <button class="btn btn-outline-success btn-xs" @click="$emit('increase-target', position)">+</button>
+                    </div>
+                    <button v-else class="btn btn-outline-success btn-sm" @click="$emit('set-target', position)">
+                        Set Target
+                    </button>
+                </div>
+
+                <div v-if="position.netqty != 0" class="d-flex flex-wrap gap-1">
+                    <button class="btn btn-outline-secondary btn-sm"
+                        v-if="trailingStoplosses[position.tsym] !== null || stoplosses[position.tsym] !== null"
+                        :class="{ active: trailingStoplosses[position.tsym] !== null }" title="Trailing stop-loss"
+                        @click="$emit('set-stoploss', position, trailingStoplosses[position.tsym] !== null ? 'convert_to_sl' : 'convert_to_tsl')">
+                        TSL
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" v-if="targets[position.tsym] !== null"
+                        :class="{ active: targetTrailing[position.tsym] }" title="Trailing target"
+                        @click="$emit('toggle-target-trail', position)">
+                        T-Target
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm"
                         v-if="trailingStoplosses[position.tsym] !== null || stoplosses[position.tsym] !== null"
                         @click="$emit('remove-stoploss', position)">
-                        Remove SL/TSL
+                        Remove SL
                     </button>
-                    <button class="btn btn-outline-secondary" v-if="targets[position.tsym] !== null"
+                    <button class="btn btn-outline-secondary btn-sm" v-if="targets[position.tsym] !== null"
                         @click="$emit('remove-target', position)">
                         Remove Target
                     </button>
