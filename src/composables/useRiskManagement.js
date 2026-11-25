@@ -176,11 +176,15 @@ export const setStoploss = (position, type) => {
       return false
     }
     const points = parseFloat(stoplossValue.value)
-    return points > 0 && updateRule(position, { mode: 'trailing_sl', slPoints: points })
+    const converted = points > 0 && updateRule(position, { mode: 'trailing_sl', slPoints: points })
+    if (converted) enableTrailingStoploss.value = true
+    return converted
   }
   if (type === 'convert_to_sl') {
     if (!existing || existing.slPrice == null) return false
-    return updateRule(position, { mode: 'static' })
+    const converted = updateRule(position, { mode: 'static' })
+    if (converted) enableTrailingStoploss.value = false
+    return converted
   }
 
   if (!enableStoploss.value) {
@@ -272,6 +276,38 @@ export const increaseTarget = (position) => {
 }
 export const decreaseTarget = (position) => {
   if (armedRule(position.tsym)?.targetPrice != null) updateRule(position, {}, { targetDelta: -0.5 })
+}
+
+// Manual price edits; clearing the field removes that level
+export const setStoplossPrice = (position, price) => {
+  if (price == null) return removeStoploss(position)
+  if (armedRule(position.tsym)?.slPrice != null) updateRule(position, { slPrice: round(price) })
+}
+export const setTargetPrice = (position, price) => {
+  if (price == null) return removeTarget(position)
+  if (armedRule(position.tsym)?.targetPrice != null) updateRule(position, { targetPrice: round(price) })
+}
+
+// Switches the position's target between fixed and trailing, and mirrors it in the Target Trailing toggle
+export const toggleTargetTrail = (position) => {
+  const rule = armedRule(position.tsym)
+  if (!rule || rule.targetPrice == null) return
+  if (rule.mode === 'target_trail') {
+    if (updateRule(position, { mode: 'static', trailPoints: null })) enableTargetTrail.value = false
+    return
+  }
+  if (rule.mode === 'trailing_sl') {
+    notify('Switch the trailing stop-loss to a fixed one before using a trailing target.')
+    return
+  }
+  const trailPoints = parseFloat(targetTrailValue.value)
+  if (!(trailPoints > 0)) {
+    notify('Set the target trailing points first.')
+    return
+  }
+  if (updateRule(position, { mode: 'target_trail', trailPoints }) && enableTarget.value) {
+    enableTargetTrail.value = true
+  }
 }
 
 // Arms default protection once a new position shows up in the position book.

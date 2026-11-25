@@ -79,20 +79,6 @@
             </div>
           </div>
 
-          <!-- Market Protection -->
-          <div class="col-6 col-md-4 col-lg-2 mt-md-1 mt-lg-2">
-            <label for="MarketProtection" class="form-label mb-0 small">Market Protection</label>
-            <select id="Segment" class="form-select form-select-sm" aria-label="Segment"
-              disabled>
-              <option value="0" selected>0%</option>
-              <option value="1">1%</option>
-              <option value="2">2%</option>
-              <option value="3">3%</option>
-              <option value="4">4%</option>
-              <option value="5">5%</option>
-            </select>
-          </div>
-
           <!-- Predefined Stoploss -->
           <div class="col-6 col-md-4 col-lg-2 mt-md-1 mt-lg-2">
             <label for="enableStoploss" class="form-label mb-0 small">Predefined Stoploss</label>
@@ -108,9 +94,9 @@
                 />
               <span class="input-group-text">Points</span>
             </div>
-            <div class="form-check form-switch mb-2">
-              <input class="form-check-input" type="checkbox" id="enableTrailingStoploss" v-model="enableTrailingStoploss" />
-              <label class="form-check-label small" for="enableTrailingStoploss">Trailing stoploss</label>
+            <div class="form-check form-switch d-flex align-items-center gap-2 ps-0 mb-2">
+              <input class="form-check-input ms-0 mt-0" type="checkbox" id="enableTrailingStoploss" v-model="enableTrailingStoploss" />
+              <label class="form-check-label small mb-0" for="enableTrailingStoploss">Trailing stoploss</label>
             </div>
           </div>
 
@@ -495,7 +481,8 @@
                 @update:selected-positions-set="selectedFlattradePositionsSet = $event"
                 @set-stoploss="(position, type) => setStoploss(position, type)" @remove-stoploss="removeStoploss"
                 @increase-stoploss="increaseStoploss" @decrease-stoploss="decreaseStoploss" @set-target="setTarget"
-                @remove-target="removeTarget" @increase-target="increaseTarget" @decrease-target="decreaseTarget" />
+                @remove-target="removeTarget" @increase-target="increaseTarget" @decrease-target="decreaseTarget"
+                @edit-stoploss="setStoplossPrice" @edit-target="setTargetPrice" @toggle-target-trail="toggleTargetTrail" />
 
               <!-- Shoonya Positions -->
               <PositionsTableComponent v-if="activeFetchFunction === 'fetchShoonyaPositions'"
@@ -504,7 +491,8 @@
                 @update:selected-positions-set="selectedShoonyaPositionsSet = $event"
                 @set-stoploss="(position, type) => setStoploss(position, type)" @remove-stoploss="removeStoploss"
                 @increase-stoploss="increaseStoploss" @decrease-stoploss="decreaseStoploss" @set-target="setTarget"
-                @remove-target="removeTarget" @increase-target="increaseTarget" @decrease-target="decreaseTarget" />
+                @remove-target="removeTarget" @increase-target="increaseTarget" @decrease-target="decreaseTarget"
+                @edit-stoploss="setStoplossPrice" @edit-target="setTargetPrice" @toggle-target-trail="toggleTargetTrail" />
 
               <p class="text-secondary my-2">
                 Stop-losses, trailing stop-losses, targets and target trails are stored and monitored by the server
@@ -674,7 +662,7 @@ import { productTypes, getProductTypeValue, updateAvailableQuantities, orderType
 import { closeAllPositions, cancelPendingOrders, closeSelectedPositions } from '@/composables/useOrderManagement'
 
 // Risk Management Composables
-import { checkStoplossesAndTargets, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget, syncRiskRules } from '@/composables/useRiskManagement'
+import { checkStoplossesAndTargets, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget, setStoplossPrice, setTargetPrice, toggleTargetTrail, syncRiskRules } from '@/composables/useRiskManagement'
 
 // Keyboard Shortcuts Composables
 import { handleHotKeys } from '@/composables/useKeyboardShortcuts'

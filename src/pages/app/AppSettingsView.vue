@@ -65,6 +65,18 @@
       <div class="col-12 border rounded p-3 bg-color-2">
         <h6 class="mb-0">Risk Management Settings</h6>
         <div class="row">
+          <!-- Market Protection -->
+          <div class="col-12 col-md-6 col-lg-4 mt-3">
+            <label for="MarketProtection" class="form-label">Market Protection</label>
+            <select id="MarketProtection" class="form-select" aria-label="Market Protection" disabled>
+              <option value="0" selected>0%</option>
+              <option value="1">1%</option>
+              <option value="2">2%</option>
+              <option value="3">3%</option>
+              <option value="4">4%</option>
+              <option value="5">5%</option>
+            </select>
+          </div>
           <!-- Max Risk & Target Toggle -->
           <div class="col-12 col-md-6 col-lg-4 mt-3">
             <label for="" class="form-label mt-2">Max Risk & Target Warning</label>

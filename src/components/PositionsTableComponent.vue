@@ -46,9 +46,9 @@
                                 <div class="col-12" v-if="trailingStoplosses[position.tsym] !== null">
                                     <div class="d-flex align-items-center">
                                         <span class="me-1 small">TSL:</span>
-                                        <span class="bg-danger text-white px-2 py-1 rounded">
-                                            {{ trailingStoplosses[position.tsym] }}
-                                        </span>
+                                        <EditableRiskValue :value="trailingStoplosses[position.tsym]"
+                                            bgClass="bg-danger text-white rounded"
+                                            @commit="(price) => $emit('edit-stoploss', position, price)" />
                                     </div>
                                 </div>
                                 <div class="col-12" v-else-if="stoplosses[position.tsym] !== null">
@@ -57,9 +57,8 @@
                                             @click="$emit('decrease-stoploss', position)">
                                             -
                                         </button>
-                                        <span class="d-flex align-items-center bg-danger text-white px-1 small">
-                                            {{ stoplosses[position.tsym] }}
-                                        </span>
+                                        <EditableRiskValue :value="stoplosses[position.tsym]"
+                                            @commit="(price) => $emit('edit-stoploss', position, price)" />
                                         <button class="btn btn-outline-success btn-xs"
                                             @click="$emit('increase-stoploss', position)">
                                             +
@@ -76,6 +75,7 @@
                                 </button>
                                 <button class="btn btn-outline btn-xs"
                                     v-if="trailingStoplosses[position.tsym] !== null || stoplosses[position.tsym] !== null"
+                                    :class="{ active: trailingStoplosses[position.tsym] !== null }"
                                     @click="$emit('set-stoploss', position, trailingStoplosses[position.tsym] !== null ? 'convert_to_sl' : 'convert_to_tsl')">
                                     {{ trailingStoplosses[position.tsym] !== null ? 'S' : 'T' }}
                                 </button>
@@ -104,9 +104,8 @@
                                             @click="$emit('decrease-target', position)">
                                             -
                                         </button>
-                                        <span class="d-flex align-items-center bg-success text-white px-1 small">
-                                            {{ targets[position.tsym] }}
-                                        </span>
+                                        <EditableRiskValue :value="targets[position.tsym]" bgClass="bg-success text-white"
+                                            @commit="(price) => $emit('edit-target', position, price)" />
                                         <button class="btn btn-outline-success btn-xs"
                                             @click="$emit('increase-target', position)">
                                             +
@@ -119,6 +118,11 @@
                                 <button class="btn btn-outline btn-xs" v-if="targets[position.tsym] === null"
                                     @click="$emit('set-target', position)">
                                     ➕
+                                </button>
+                                <button class="btn btn-outline btn-xs" v-if="targets[position.tsym] !== null"
+                                    :class="{ active: targetTrailing[position.tsym] }" title="Trailing target"
+                                    @click="$emit('toggle-target-trail', position)">
+                                    T
                                 </button>
                                 <button class="btn btn-outline btn-xs" v-if="targets[position.tsym] !== null"
                                     @click="$emit('remove-target', position)">
@@ -268,6 +272,9 @@ const emit = defineEmits([
     'remove-target',
     'increase-target',
     'decrease-target',
+    'edit-stoploss',
+    'edit-target',
+    'toggle-target-trail',
 ]);
 
 
@@ -275,7 +282,11 @@ const emit = defineEmits([
 import { formatTradingSymbol, formatPrice } from '@/composables/useFormatters';
 
 // Global State
-import { positionLTPs, positionPercentChanges, stoplosses, targets, trailingStoplosses } from '@/stores/globalStore'
+import { positionLTPs, positionPercentChanges, stoplosses, targets, trailingStoplosses, riskRules } from '@/stores/globalStore'
+import EditableRiskValue from './EditableRiskValue.vue'
+
+const targetTrailing = computed(() =>
+    Object.fromEntries(Object.entries(riskRules.value).map(([tsym, rule]) => [tsym, rule.status === 'armed' && rule.mode === 'target_trail'])))
 
 
 const sortedPositions = computed(() => {
