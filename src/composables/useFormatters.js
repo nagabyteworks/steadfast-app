@@ -82,15 +82,6 @@ export const formatTradingSymbol = (symbol, excludeStrikePrice = false) => {
   return symbol
 }
 
-// Price Formatter
-export const formatPrice = (price) => {
-  if (price == null || isNaN(price)) {
-    return '-'
-  }
-  const numPrice = Number(price)
-  return numPrice.toFixed(2)
-}
-
 // Client ID Masking
 export const manageBrokerMaskClientId = (brokerClientId) => {
   if (!brokerClientId) return brokerClientId // Ensure brokerClientId is defined and not a placeholder
@@ -146,4 +137,12 @@ export const formatTime = (timeString) => {
 
   const formattedTime = `${formattedHours}:${minutes}:${seconds} ${ampm}`
   return `${formattedTime}`
+}
+
+// Indian digit grouping (1,00,000.00); non-numeric placeholders pass through unchanged
+export const formatPrice = (value, digits = 2) => {
+  if (value === null || value === undefined || value === '' || !Number.isFinite(Number(value))) {
+    return value ?? '-'
+  }
+  return Number(value).toLocaleString('en-IN', { minimumFractionDigits: digits, maximumFractionDigits: digits })
 }

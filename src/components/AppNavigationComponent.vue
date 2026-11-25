@@ -19,7 +19,7 @@
         </button>
         <!-- Always-on Notification Area -->
         <div class="notification-area d-flex align-items-center ms-3 d-lg-none">
-          <AccountRefreshButton class="me-2" />
+          <AccountRefreshButton class="refresh-separator" />
           <NotificationComponent
             v-model:showToast="showToast"
             v-model:message="toastMessage"
@@ -47,7 +47,7 @@
           </ul>
           <!-- Always-on Notification Area -->
           <div class="notification-area d-none d-lg-flex align-items-center ms-3">
-            <AccountRefreshButton class="me-2" />
+            <AccountRefreshButton class="refresh-separator" />
             <NotificationComponent
               v-model:showToast="showToast"
               v-model:message="toastMessage"
@@ -177,5 +177,10 @@ const router = useRouter()
   position: relative;
   z-index: 2;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+.refresh-separator {
+  margin-right: 1.25rem;
+  padding-right: 1.25rem;
+  border-right: 1px solid rgba(128, 128, 128, 0.4);
 }
 </style>

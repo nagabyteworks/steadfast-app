@@ -145,8 +145,8 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     }
 
     const exchangeSegment = getExchangeSegment()
-    if (usesServerManagedAccount && exchangeSegment !== 'NFO') {
-      throw new Error('Server-managed live orders are limited to NSE derivatives')
+    if (usesServerManagedAccount && !['NFO', 'BFO'].includes(exchangeSegment)) {
+      throw new Error('Server-managed live orders are limited to NSE and BSE index derivatives')
     }
 
     if (enableStoploss.value && (!Number.isFinite(Number(stoplossValue.value)) || Number(stoplossValue.value) <= 0)) {
@@ -322,7 +322,7 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
         orderData = {
           uid: selectedBroker.value.clientId,
           actid: selectedBroker.value.clientId,
-          exch: selectedExchange.value === 'NFO' ? 'NFO' : 'BFO',
+          exch: position.exch || (selectedExchange.value === 'NFO' ? 'NFO' : 'BFO'),
           tsym: position.tsym,
           qty: quantityToPlace.toString(),
           prc: '0',

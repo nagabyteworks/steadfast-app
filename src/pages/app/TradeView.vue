@@ -8,54 +8,21 @@
   <!-- Place Order Form -->
   <section class="row mt-2">
     <form @submit.prevent>
-      <div v-if="isServerManaged" class="alert alert-danger">
-        Server-managed orders place live NSE derivatives trades and are limited to one contract lot each.
-        Stop-loss, target and trailing rules are monitored by the server, so they keep working when this page is closed.
-        If protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured.
-        <strong v-if="riskDryRun">DRY RUN: triggered exits are only logged on the server and no exit order is sent.</strong>
-        <span v-else>Triggered exits place live market orders. Verify fills with Flattrade.</span>
-      </div>
-      <div v-if="selectedBroker?.brokerName === 'Flattrade' && positionsStale" class="alert alert-danger">
+      <div v-if="selectedBroker?.brokerName === 'Flattrade' && positionsStale && !staleDismissed"
+        class="alert alert-danger alert-dismissible">
+        <button type="button" class="btn-close" aria-label="Close" @click="staleDismissed = true"></button>
         Position data is stale or unavailable. Last successful refresh:
         {{ flattradePositionsLastUpdatedAt ? new Date(flattradePositionsLastUpdatedAt).toLocaleTimeString() : 'never' }}.
         Verify current positions directly with your broker.
       </div>
-      <div
-        v-if="selectedBroker?.brokerName === 'Flattrade' && (!brokerStreamHealth.authenticated || wsConnectionState !== 'connected' || marketDataStale)"
-        class="alert alert-warning"
-      >
-        Broker stream {{ brokerStreamHealth.connectionState }}; browser connection {{ wsConnectionState }};
-        market data is {{ marketDataStale ? 'stale or unavailable' : 'current' }}.
-      </div>
       <fieldset>
         <div class="row">
-          <!-- Exchange Selection -->
-          <div class="col-6 col-md-4 col-lg-2">
-            <label for="Exchange" class="form-label mb-0 small">Exchange</label>
-            <select id="Exchange" class="form-select form-select-sm" aria-label="Exchange" v-model="selectedExchange"
-              @change="fetchTradingData">
-              <option v-for="exchange in exchangeOptions" :key="exchange" :value="exchange">
-                {{ exchange }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Segment Selection -->
-          <div class="col-6 col-md-4 col-lg-2">
-            <label for="Segment" class="form-label mb-0 small">Segment</label>
-            <select id="Segment" class="form-select form-select-sm" aria-label="Segment"
-              disabled>
-              <option value="Options" selected>Options</option>
-              <option value="Futures">Futures</option>
-            </select>
-          </div>
-
           <!-- Master Symbol Selection -->
           <div class="col-6 col-md-4 col-lg-2">
             <label for="MasterSymbol" class="form-label mb-0 small">Master Symbol</label>
             <select id="MasterSymbol" class="form-select form-select-sm" aria-label="Master Symbol"
               v-model="selectedMasterSymbol">
-              <option v-for="symbol in exchangeSymbols[selectedExchange]" :key="symbol" :value="symbol">
+              <option v-for="symbol in masterSymbolOptions" :key="symbol" :value="symbol">
                 {{ symbol }}
               </option>
             </select>
@@ -220,13 +187,13 @@
                   <span class="ms-2 fw-bold" :class="{
                     'text-success': parseFloat(latestCallLTP) > parseFloat(callOpenPrice),
                     'text-danger': parseFloat(latestCallLTP) < parseFloat(callOpenPrice)
-                  }">{{ latestCallLTP }}
+                  }">{{ formatPrice(latestCallLTP) }}
                   </span>
                   <small v-if="callPercentChange !== null" class="ms-1" :class="callPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(callPercentChange) }})</small>
                 </span>
 
                 <span class="ms-2 fw-bold text-secondary">
-                  ₹{{ (parseFloat(latestCallLTP) * selectedQuantity).toFixed(2) }}
+                  ₹{{ formatPrice(parseFloat(latestCallLTP) * selectedQuantity) }}
                 </span>
               </div>
             </div>
@@ -235,10 +202,10 @@
 
             <!-- Call OHLC Values -->
             <div class="d-flex w-100 justify-content-around flex-wrap" v-if="showOHLCValues">
-              <span class="text-primary">O: {{ callOpenPrice }}</span>
-              <span class="text-success">H: {{ callHighPrice }}</span>
-              <span class="text-danger">L: {{ callLowPrice }}</span>
-              <span class="text-warning">C: {{ callClosePrice }}</span>
+              <span class="text-primary">O: {{ formatPrice(callOpenPrice) }}</span>
+              <span class="text-success">H: {{ formatPrice(callHighPrice) }}</span>
+              <span class="text-danger">L: {{ formatPrice(callLowPrice) }}</span>
+              <span class="text-warning">C: {{ formatPrice(callClosePrice) }}</span>
             </div>
             <!-- LTP Range Bar for Call Strike -->
             <LtpRangeBarComponent v-if="showLTPRangeBar" :ltpRangeWidth="callLtpRangeWidth"
@@ -252,49 +219,55 @@
               <b :class="{
                 'text-success': parseFloat(niftyPrice) > parseFloat(masterOpenPrice),
                 'text-danger': parseFloat(niftyPrice) < parseFloat(masterOpenPrice)
-              }">{{ niftyPrice }}</b>
+              }">{{ formatPrice(niftyPrice) }}</b>
+              <small v-if="masterPercentChange !== null" class="ms-1" :class="masterPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(masterPercentChange) }})</small>
             </p>
             <p class="mb-0" v-if="selectedMasterSymbol === 'BANKNIFTY'">
               Bank Nifty:
               <b :class="{
                 'text-success': parseFloat(bankNiftyPrice) > parseFloat(masterOpenPrice),
                 'text-danger': parseFloat(bankNiftyPrice) < parseFloat(masterOpenPrice)
-              }">{{ bankNiftyPrice }}</b>
+              }">{{ formatPrice(bankNiftyPrice) }}</b>
+              <small v-if="masterPercentChange !== null" class="ms-1" :class="masterPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(masterPercentChange) }})</small>
             </p>
             <p class="mb-0" v-if="selectedMasterSymbol === 'FINNIFTY'">
               Fin Nifty:
               <b :class="{
                 'text-success': parseFloat(finniftyPrice) > parseFloat(masterOpenPrice),
                 'text-danger': parseFloat(finniftyPrice) < parseFloat(masterOpenPrice)
-              }">{{ finniftyPrice }}</b>
+              }">{{ formatPrice(finniftyPrice) }}</b>
+              <small v-if="masterPercentChange !== null" class="ms-1" :class="masterPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(masterPercentChange) }})</small>
             </p>
             <p class="mb-0" v-if="selectedMasterSymbol === 'MIDCPNIFTY'">
               Nifty Mid Select:
               <b :class="{
                 'text-success': parseFloat(midcpniftyPrice) > parseFloat(masterOpenPrice),
                 'text-danger': parseFloat(midcpniftyPrice) < parseFloat(masterOpenPrice)
-              }">{{ midcpniftyPrice }}</b>
+              }">{{ formatPrice(midcpniftyPrice) }}</b>
+              <small v-if="masterPercentChange !== null" class="ms-1" :class="masterPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(masterPercentChange) }})</small>
             </p>
             <p class="mb-0" v-if="selectedMasterSymbol === 'SENSEX'">
               Sensex:
               <b :class="{
                 'text-success': parseFloat(sensexPrice) > parseFloat(masterOpenPrice),
                 'text-danger': parseFloat(sensexPrice) < parseFloat(masterOpenPrice)
-              }">{{ sensexPrice }}</b>
+              }">{{ formatPrice(sensexPrice) }}</b>
+              <small v-if="masterPercentChange !== null" class="ms-1" :class="masterPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(masterPercentChange) }})</small>
             </p>
             <p class="mb-0" v-if="selectedMasterSymbol === 'BANKEX'">
               Bankex:
               <b :class="{
                 'text-success': parseFloat(bankexPrice) > parseFloat(masterOpenPrice),
                 'text-danger': parseFloat(bankexPrice) < parseFloat(masterOpenPrice)
-              }">{{ bankexPrice }}</b>
+              }">{{ formatPrice(bankexPrice) }}</b>
+              <small v-if="masterPercentChange !== null" class="ms-1" :class="masterPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(masterPercentChange) }})</small>
             </p>
             <!-- Master OHLC Values -->
             <div class="d-flex w-100 justify-content-around flex-wrap" v-if="showOHLCValues">
-              <span class="text-primary">O: {{ masterOpenPrice }}</span>
-              <span class="text-success">H: {{ masterHighPrice }}</span>
-              <span class="text-danger">L: {{ masterLowPrice }}</span>
-              <span class="text-warning">C: {{ masterClosePrice }}</span>
+              <span class="text-primary">O: {{ formatPrice(masterOpenPrice) }}</span>
+              <span class="text-success">H: {{ formatPrice(masterHighPrice) }}</span>
+              <span class="text-danger">L: {{ formatPrice(masterLowPrice) }}</span>
+              <span class="text-warning">C: {{ formatPrice(masterClosePrice) }}</span>
             </div>
             <!-- LTP Range Bar for Live Underlying Price -->
             <LtpRangeBarComponent v-if="showLTPRangeBar" :ltpRangeWidth="ltpRangeWidth"
@@ -321,14 +294,14 @@
               </div>
               <div class="col-12 mt-2 d-flex align-items-center justify-content-between">
                 <span class="ms-2 fw-bold text-secondary">
-                  ₹{{ (parseFloat(latestPutLTP) * selectedQuantity).toFixed(2) }}
+                  ₹{{ formatPrice(parseFloat(latestPutLTP) * selectedQuantity) }}
                 </span>
                 <span>
                   <span>LTP: </span>
                   <span class="ms-2 fw-bold" :class="{
                     'text-success': parseFloat(latestPutLTP) > parseFloat(putOpenPrice),
                     'text-danger': parseFloat(latestPutLTP) < parseFloat(putOpenPrice)
-                  }">{{ latestPutLTP }}
+                  }">{{ formatPrice(latestPutLTP) }}
                   </span>
                   <small v-if="putPercentChange !== null" class="ms-1" :class="putPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(putPercentChange) }})</small>
                 </span>
@@ -337,10 +310,10 @@
 
             <!-- Put OHLC Values -->
             <div class="d-flex w-100 justify-content-around flex-wrap" v-if="showOHLCValues">
-              <span class="text-primary">O: {{ putOpenPrice }}</span>
-              <span class="text-success">H: {{ putHighPrice }}</span>
-              <span class="text-danger">L: {{ putLowPrice }}</span>
-              <span class="text-warning">C: {{ putClosePrice }}</span>
+              <span class="text-primary">O: {{ formatPrice(putOpenPrice) }}</span>
+              <span class="text-success">H: {{ formatPrice(putHighPrice) }}</span>
+              <span class="text-danger">L: {{ formatPrice(putLowPrice) }}</span>
+              <span class="text-warning">C: {{ formatPrice(putClosePrice) }}</span>
             </div>
             <!-- LTP Range Bar for Put Strike -->
             <LtpRangeBarComponent v-if="showLTPRangeBar" :ltpRangeWidth="putLtpRangeWidth"
@@ -398,27 +371,22 @@
 
           <!-- Close & Cancel Buttons -->
           <div class="order-3 order-md-2 order-lg-2 col-12 col-md-4 col-lg-4 text-center">
-            <div class="row mt-2">
-              <div class="col-6 col-md-12 col-lg-12">
-                <button v-if="selectedShoonyaPositionsSet.size === 0 && selectedFlattradePositionsSet.size === 0"
-                  class="btn btn-sm btn-outline fs-6 col-12 col-md-11 col-lg-10" @click="closeAllPositions">
-                  <kbd v-if="enableHotKeys">F6</kbd>
-                  Close All
-                </button>
-                <button v-if="selectedShoonyaPositionsSet.size > 0 || selectedFlattradePositionsSet.size > 0"
-                  class="btn btn-sm btn-outline fs-6 col-12 col-md-11 col-lg-10" @click="closeSelectedPositions">
-                  <kbd v-if="enableHotKeys">F6</kbd>
-                  Close Selected
-                </button>
-              </div>
-              <div class="col-6 col-md-12 col-lg-12">
-                <button class="btn btn-sm btn-outline fs-6 col-12 col-md-11 col-lg-10 mt-md-2 mt-lg-2"
-                  @click="cancelPendingOrders">
-                  <kbd v-if="enableHotKeys">F7</kbd>
-                  Cancel Orders
-                </button>
-              </div>
+            <div class="d-flex justify-content-center gap-2 mt-2">
+              <button v-if="selectedShoonyaPositionsSet.size === 0 && selectedFlattradePositionsSet.size === 0"
+                class="btn btn-sm btn-outline text-nowrap" @click="closeAllPositions">
+                <kbd v-if="enableHotKeys">F6</kbd>
+                Close All
+              </button>
+              <button v-else class="btn btn-sm btn-outline text-nowrap" @click="closeSelectedPositions">
+                <kbd v-if="enableHotKeys">F6</kbd>
+                Close Selected
+              </button>
+              <button class="btn btn-sm btn-outline text-nowrap" @click="cancelPendingOrders">
+                <kbd v-if="enableHotKeys">F7</kbd>
+                Cancel Orders
+              </button>
             </div>
+            <div class="small mt-2 broker-message" v-if="brokerMessage">{{ brokerMessage }}</div>
           </div>
           <!-- Put Strike Buy/Sell Buttons -->
           <div class="order-2 order-md-3 order-lg-3 col-6 col-md-4 col-lg-4 text-end">
@@ -692,6 +660,7 @@ import {
   putClosePrice,
   wsConnectionState, productionAccountError, flattradePositionsStale,
   flattradePositionsLastUpdatedAt, lastMarketDataAt, brokerStreamHealth,
+  masterPercentChange, brokerMessage, systemNotices,
 } from '@/stores/globalStore'
 
 
@@ -716,7 +685,8 @@ import { fetchTradingData, updateSymbolData } from '@/composables/useMarketData'
 // Formatters
 import {
   formatTradingSymbol,
-  formatDate
+  formatDate,
+  formatPrice
 } from '@/composables/useFormatters'
 
 // WebSocket Composables
@@ -740,6 +710,7 @@ import {
 
   // Computed properties
   exchangeOptions,
+  masterSymbolOptions,
   todayExpirySymbol,
   maxLots,
   combinedOrdersAndTrades,
@@ -764,6 +735,24 @@ import {
 } from '@/composables/usePnlCalculations'
 
 const isServerManaged = usesServerManagedAccount;
+const staleDismissed = ref(false);
+const lotsText = '1 to 10 contract lots';
+const serverManagedNotice = computed(() =>
+  `Server-managed orders place live NSE/BSE index derivatives trades (${lotsText} each). `
+  + 'Stop-loss, target and trailing rules are monitored by the server, so they keep working when this page is closed. '
+  + 'If protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured. '
+  + (riskDryRun.value
+    ? 'DRY RUN: triggered exits are only logged on the server and no exit order is sent.'
+    : 'Triggered exits place live limit orders. Verify fills with Flattrade.'))
+const streamNotice = computed(() =>
+  selectedBroker.value?.brokerName === 'Flattrade'
+  && (!brokerStreamHealth.value.authenticated || wsConnectionState.value !== 'connected' || marketDataStale.value)
+    ? `Broker stream ${brokerStreamHealth.value.connectionState}; browser connection ${wsConnectionState.value}; `
+      + `market data is ${marketDataStale.value ? 'stale or unavailable' : 'current'}.`
+    : null)
+watch([serverManagedNotice, streamNotice], () => {
+  systemNotices.value = [isServerManaged ? serverManagedNotice.value : null, streamNotice.value].filter(Boolean)
+}, { immediate: true })
 const formatPercent = (value) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 const marketDataStale = computed(
   () => !lastMarketDataAt.value || currentTime.value - lastMarketDataAt.value > 30_000
@@ -923,6 +912,7 @@ onBeforeUnmount(() => {
   }
   clearInterval(accountRefreshInterval);
   accountRefreshHandler.value = null;
+  systemNotices.value = [];
   if (positionRefreshInterval) {
     clearInterval(positionRefreshInterval);
   }

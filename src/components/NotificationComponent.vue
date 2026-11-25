@@ -1,7 +1,14 @@
 <template>
-    <div class="notification-container d-flex align-items-center">
-        <div class="notification-icon me-2" :class="{ 'has-notification': showToast }">
+    <div class="notification-container d-flex align-items-center position-relative">
+        <button type="button" class="notification-icon me-2 btn btn-link p-0 position-relative border-0"
+            :class="{ 'has-notification': showToast }" aria-label="Notices" @click="open = !open">
             <font-awesome-icon icon="bell" />
+            <span v-if="systemNotices.length" class="badge rounded-pill bg-danger notice-badge">
+                {{ systemNotices.length }}
+            </span>
+        </button>
+        <div v-if="open && systemNotices.length" class="notice-panel shadow border rounded p-2">
+            <div v-for="notice in systemNotices" :key="notice" class="small mb-2">{{ notice }}</div>
         </div>
         <div class="notification-message" :class="{ 'show-message': showToast }">
             {{ message || 'No new notifications' }}
@@ -12,6 +19,9 @@
 <script setup>
 import { ref, watch } from 'vue';
 import { FontAwesomeIcon } from '@/font-awesome';
+import { systemNotices } from '@/stores/globalStore';
+
+const open = ref(false);
 
 const props = defineProps({
     showToast: Boolean,
@@ -72,3 +82,11 @@ const clearNotification = () => {
     }
 };
 </script>
+
+<style scoped>
+.notice-badge { position: absolute; top: -6px; right: -10px; font-size: 0.6rem; }
+.notice-panel {
+    position: absolute; top: 100%; right: 0; z-index: 1050; width: 22rem; max-width: 90vw;
+    background: var(--bs-body-bg, #fff); color: var(--bs-body-color, #000);
+}
+</style>

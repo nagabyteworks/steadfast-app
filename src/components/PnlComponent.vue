@@ -15,7 +15,7 @@
             <small class="text-muted">Total Profit</small>
             <span class="ms-1 fw-bold"
                 :class="totalProfit > 0 ? 'text-success' : totalProfit < 0 ? 'text-danger' : null">
-                ₹{{ totalProfit.toFixed(2) }}
+                ₹{{ formatPrice(totalProfit) }}
             </span>
         </div> -->
         <div class="col-6 col-md-3 col-lg-3 d-flex align-items-center justify-content-center" style="height: 40px">
@@ -28,7 +28,7 @@
         <div class="col-6 col-md-3 col-lg-3 d-flex align-items-center justify-content-center" style="height: 40px">
             <small class="text-muted">Net PNL</small>
             <span class="ms-1 fw-bold" :class="netPnl > 0 ? 'text-success' : netPnl < 0 ? 'text-danger' : null">
-                ₹{{ netPnl.toFixed(2) }}
+                ₹{{ formatPrice(netPnl) }}
             </span>
         </div>
     </section>
@@ -36,6 +36,7 @@
 
 <script setup>
 import { defineProps } from 'vue';
+import { formatPrice } from '@/composables/useFormatters';
 
 // Global State
 

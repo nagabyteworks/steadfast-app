@@ -25,6 +25,7 @@ import {
   latestCallLTP,
   latestPutLTP,
   callPercentChange,
+  masterPercentChange,
   putPercentChange,
   positionPercentChanges,
   positionSecurityIds,
@@ -288,6 +289,8 @@ export const updateMasterSymbolPrice = (quoteData) => {
       const newPrice = parseFloat(quoteData.lp)
       if (!isNaN(newPrice)) {
         priceMap[selectedMasterSymbol.value].value = newPrice
+        const percentChange = readPercentChange(quoteData)
+        if (percentChange !== undefined) masterPercentChange.value = percentChange
         // console.log(`Updated ${selectedMasterSymbol.value} price to:`, newPrice)
         updateOHLCIfNotEmpty('master', quoteData)
       } else {

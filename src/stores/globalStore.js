@@ -85,6 +85,7 @@ export const defaultCallSecurityId = ref(null)
 export const defaultPutSecurityId = ref(null)
 export const positionLTPs = ref({})
 // Percentage change versus the previous close, as reported by the broker feed
+export const masterPercentChange = ref(null)
 export const callPercentChange = ref(null)
 export const putPercentChange = ref(null)
 export const positionPercentChanges = ref({})
@@ -216,3 +217,16 @@ export const wsConnectionState = ref('disconnected')
 export const accountRefreshing = ref(false)
 export const accountRefreshedAt = ref(null)
 export const accountRefreshHandler = shallowRef(null)
+
+// Persistent notices shown in the navigation notification dropdown
+export const systemNotices = ref([])
+
+// Latest broker/order message, shown under the order buttons for 10 seconds
+export const brokerMessage = ref('')
+let brokerMessageTimer = null
+watch(toastMessage, (message) => {
+  if (!message) return
+  brokerMessage.value = message
+  clearTimeout(brokerMessageTimer)
+  brokerMessageTimer = setTimeout(() => { brokerMessage.value = '' }, 10000)
+})

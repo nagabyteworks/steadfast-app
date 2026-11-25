@@ -89,7 +89,7 @@
                         <td v-else>-</td>
                         <td style="width: 80px;"
                             :class="{ 'text-success': parseFloat(positionLTPs[position.tsym]) > parseFloat(position.totbuyavgprc), 'text-danger': parseFloat(positionLTPs[position.tsym]) < parseFloat(position.totbuyavgprc) }">
-                            {{ positionLTPs[position.tsym] }}
+                            {{ formatPrice(positionLTPs[position.tsym]) }}
                             <div v-if="positionPercentChanges[position.tsym] !== undefined" class="small"
                                 :class="positionPercentChanges[position.tsym] >= 0 ? 'text-success' : 'text-danger'">
                                 {{ formatPercent(positionPercentChanges[position.tsym]) }}
@@ -128,14 +128,14 @@
                         </td>
                         <td v-else>-</td>
                         <td>{{ formatProductType(position.prd) }}</td>
-                        <td>{{ position.totbuyavgprc }}</td>
-                        <td>{{ position.totsellavgprc }}</td>
+                        <td>{{ formatPrice(position.totbuyavgprc) }}</td>
+                        <td>{{ formatPrice(position.totsellavgprc) }}</td>
                         <td :class="position.rpnl > 0 ? 'text-success' : position.rpnl < 0 ? 'text-danger' : null">
-                            {{ position.rpnl }}
+                            {{ formatPrice(position.rpnl) }}
                         </td>
                         <td
                             :class="position.calculatedUrmtom > 0 ? 'text-success' : position.calculatedUrmtom < 0 ? 'text-danger' : null">
-                            {{ position.calculatedUrmtom != null ? position.calculatedUrmtom.toFixed(2) : '-' }}
+                            {{ position.calculatedUrmtom != null ? formatPrice(position.calculatedUrmtom) : '-' }}
                         </td>
                     </tr>
                 </template>
@@ -166,7 +166,7 @@
                             'badge',
                             position.calculatedUrmtom > 0 ? 'bg-success' : 'bg-danger'
                         ]">
-                            {{ position.calculatedUrmtom != null ? position.calculatedUrmtom.toFixed(2) : '-' }}
+                            {{ position.calculatedUrmtom != null ? formatPrice(position.calculatedUrmtom) : '-' }}
                         </span>
                     </div>
                 </div>
@@ -175,7 +175,7 @@
                         <small>Qty: {{ position.netqty }}</small>
                     </div>
                     <div>
-                        <small>LTP: {{ positionLTPs[position.tsym] }}
+                        <small>LTP: {{ formatPrice(positionLTPs[position.tsym]) }}
                             <span v-if="positionPercentChanges[position.tsym] !== undefined"
                                 :class="positionPercentChanges[position.tsym] >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(positionPercentChanges[position.tsym]) }})</span></small>
                     </div>
@@ -272,7 +272,7 @@ const emit = defineEmits([
 
 
 // Formatters
-import { formatTradingSymbol } from '@/composables/useFormatters';
+import { formatTradingSymbol, formatPrice } from '@/composables/useFormatters';
 
 // Global State
 import { positionLTPs, positionPercentChanges, stoplosses, targets, trailingStoplosses } from '@/stores/globalStore'

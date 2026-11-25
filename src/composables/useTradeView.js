@@ -167,6 +167,12 @@ import {
 export const exchangeOptions = computed(() => {
   return Object.keys(exchangeSymbols.value).filter((key) => key !== 'symbolData')
 })
+// One list of master symbols across exchanges; the exchange is derived from the symbol
+export const masterSymbolOptions = computed(() =>
+  exchangeOptions.value.flatMap((exchange) => exchangeSymbols.value[exchange] || [])
+)
+const exchangeForSymbol = (symbol) =>
+  exchangeOptions.value.find((exchange) => exchangeSymbols.value[exchange]?.includes(symbol))
 export const todayExpirySymbol = computed(() => {
   const today = new Date()
   const dayOfWeek = today.getDay() // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
@@ -387,25 +393,12 @@ export const updateExchangeSymbols = () => {
 export const setDefaultExchangeAndMasterSymbol = () => {
   const cachedData = JSON.parse(localStorage.getItem('cachedTradingData')) || {}
 
-  // Set the exchange
-  const savedExchange = cachedData.selectedExchange || localStorage.getItem('selectedExchange')
-  if (savedExchange && exchangeOptions.value.includes(savedExchange)) {
-    selectedExchange.value = savedExchange
-  } else if (exchangeOptions.value.length > 0) {
-    selectedExchange.value = exchangeOptions.value[0]
-  }
-
-  // Set the master symbol
   const savedMasterSymbol =
     cachedData.selectedMasterSymbol || localStorage.getItem('selectedMasterSymbol')
-  if (
-    savedMasterSymbol &&
-    exchangeSymbols.value[selectedExchange.value]?.includes(savedMasterSymbol)
-  ) {
-    selectedMasterSymbol.value = savedMasterSymbol
-  } else if (exchangeSymbols.value[selectedExchange.value]?.length > 0) {
-    selectedMasterSymbol.value = exchangeSymbols.value[selectedExchange.value][0]
-  }
+  selectedMasterSymbol.value = masterSymbolOptions.value.includes(savedMasterSymbol)
+    ? savedMasterSymbol
+    : masterSymbolOptions.value[0]
+  selectedExchange.value = exchangeForSymbol(selectedMasterSymbol.value) ?? selectedExchange.value
 
   // If we have cached data for the selected symbol, populate allSymbolsData
   if (cachedData[selectedMasterSymbol.value]) {
@@ -721,6 +714,8 @@ watch(
 )
 // Modify the watcher for selectedMasterSymbol
 watch(selectedMasterSymbol, (newValue, oldValue) => {
+  const exchange = exchangeForSymbol(newValue)
+  if (exchange && exchange !== selectedExchange.value) selectedExchange.value = exchange
   saveUserChoice()
   updateAvailableQuantities()
   updateSelectedQuantity()
@@ -766,18 +761,9 @@ export const getInitialProductType = () => {
 watch(selectedProductType, (newValue) => {
   localStorage.setItem('selectedProductType', newValue)
 })
-// Add a watcher for selectedExchange
-watch(selectedExchange, (newValue) => {
-  saveUserChoice() // Save the user's choice
-  if (exchangeSymbols.value[newValue].length > 0) {
-    const savedMasterSymbol = localStorage.getItem('selectedMasterSymbol')
-    selectedMasterSymbol.value =
-      savedMasterSymbol && exchangeSymbols.value[newValue].includes(savedMasterSymbol)
-        ? savedMasterSymbol
-        : exchangeSymbols.value[newValue][0]
-  } else {
-    selectedMasterSymbol.value = null
-  }
+// The exchange follows the selected master symbol
+watch(selectedExchange, () => {
+  saveUserChoice()
   updateAvailableQuantities()
 })
 watch(selectedOrderType, (newValue, oldValue) => {
