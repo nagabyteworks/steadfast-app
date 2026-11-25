@@ -46,6 +46,36 @@ it('clears stale positions only when the broker explicitly reports no data', asy
   expect(positionSecurityIds.value).toEqual({})
 })
 
+it('recognizes the Flattrade empty position book response', async () => {
+  selectedBroker.value = { brokerName: 'Flattrade', clientId: 'test-user' }
+  localStorage.setItem('FLATTRADE_API_TOKEN', 'test-token')
+  flatTradePositionBook.value = [{ tsym: 'OLD', token: 'old-token' }]
+  flattradePositionsStale.value = true
+  vi.spyOn(axios, 'post').mockResolvedValue({
+    data: { stat: 'Not_Ok', emsg: 'Error Occurred : 5 "no data"' }
+  })
+
+  await fetchFlattradePositions()
+
+  expect(flatTradePositionBook.value).toEqual([])
+  expect(flattradePositionsStale.value).toBe(false)
+})
+
+it('does not treat other broker errors mentioning no data as an empty book', async () => {
+  selectedBroker.value = { brokerName: 'Flattrade', clientId: 'test-user' }
+  localStorage.setItem('FLATTRADE_API_TOKEN', 'test-token')
+  flatTradePositionBook.value = [{ tsym: 'OLD', token: 'old-token' }]
+  vi.spyOn(axios, 'post').mockResolvedValue({
+    data: { stat: 'Not_Ok', emsg: 'Session expired: no data available' }
+  })
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  await fetchFlattradePositions()
+
+  expect(flatTradePositionBook.value).toHaveLength(1)
+  expect(flattradePositionsStale.value).toBe(true)
+})
+
 it('records successful position refreshes and replaces stale security IDs', async () => {
   selectedBroker.value = { brokerName: 'Flattrade', clientId: 'test-user' }
   localStorage.setItem('FLATTRADE_API_TOKEN', 'test-token')

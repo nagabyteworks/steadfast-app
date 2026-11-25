@@ -103,6 +103,8 @@ export const prepareOrderPayload = (
   }
 }
 export const placeOrder = async (transactionType, drvOptionType) => {
+  let acknowledgedLots = 0
+  let requestInFlight = false
   try {
     let selectedStrike =
       drvOptionType === 'CALL' ? selectedCallStrike.value : selectedPutStrike.value
@@ -136,7 +138,6 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     }
 
     let remainingLots = orderLots
-    let placedLots = 0
 
     while (remainingLots > 0) {
       const lotsToPlace = Math.min(remainingLots, freezeLimit)
@@ -159,6 +160,7 @@ export const placeOrder = async (transactionType, drvOptionType) => {
       }
 
       let response
+      requestInFlight = true
       if (selectedBroker.value?.brokerName === 'Flattrade') {
         const FLATTRADE_API_TOKEN = import.meta.env.PROD ? null : localStorage.getItem('FLATTRADE_API_TOKEN')
         const payload = qs.stringify(orderData)
@@ -177,14 +179,24 @@ export const placeOrder = async (transactionType, drvOptionType) => {
             'Content-Type': 'application/x-www-form-urlencoded'
           }
         })
+      } else {
+        requestInFlight = false
+        throw new Error('Unsupported broker')
       }
 
       if (response?.data?.stat !== 'Ok' || !response.data.norenordno) {
-        throw new Error('Broker did not acknowledge the order')
+        requestInFlight = false
+        const brokerMessage = response?.data?.stat === 'Not_Ok' && typeof response.data.emsg === 'string'
+          ? response.data.emsg.trim()
+          : ''
+        throw new Error(brokerMessage
+          ? `Broker rejected the order: ${brokerMessage}`
+          : 'Broker did not acknowledge the order. Verify orders with your broker before retrying.')
       }
+      requestInFlight = false
       console.log(`Placed order for ${lotsToPlace} lots (${quantityToPlace} quantity)`)
       remainingLots -= lotsToPlace
-      placedLots += lotsToPlace
+      acknowledgedLots += lotsToPlace
 
       // Add a small delay between orders for LMT_LTP to get updated LTP
       if (['LMT_LTP'].includes(selectedOrderType.value)) {
@@ -193,9 +205,9 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     }
 
     console.log(
-      `All orders placed successfully. Total: ${placedLots} lots (${fullOrderQuantity} quantity)`
+      `All orders submitted. Total: ${acknowledgedLots} lots (${fullOrderQuantity} quantity)`
     )
-    toastMessage.value = `Order(s) placed successfully for ${placedLots} lots`
+    toastMessage.value = `Order(s) submitted for ${acknowledgedLots} lots. Verify fills with your broker.`
     showToast.value = true
 
     // Add a delay before fetching updated data
@@ -234,11 +246,14 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     await updateFundLimits()
   } catch (error) {
     logRequestError('Error placing order', error)
-    if (error.response?.data?.message) {
-      const firstThreeWords = error.response.data.message.split(' ').slice(0, 3).join(' ')
-      toastMessage.value = firstThreeWords
+    if (acknowledgedLots > 0) {
+      toastMessage.value = 'An order was submitted, but a later step failed. Verify orders and positions with your broker before retrying.'
+    } else if (typeof error.response?.data?.message === 'string') {
+      toastMessage.value = error.response.data.message
+    } else if (requestInFlight) {
+      toastMessage.value = 'Order status is uncertain. Verify orders with your broker before retrying.'
     } else {
-      toastMessage.value = 'Failed to place order unfortunately'
+      toastMessage.value = error.message || 'Failed to place order.'
     }
     showToast.value = true
   }

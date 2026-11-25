@@ -207,7 +207,8 @@ export const fetchFlattradePositions = async () => {
       subscribeToPositionLTPs()
       subscribeToOptions()
     } else if (
-      positionBookRes.data?.emsg?.trim().toLowerCase() === 'no data'
+      positionBookRes.data?.stat === 'Not_Ok' &&
+      /^(?:no data|error occurred\s*:\s*5\s*"no data")$/i.test(positionBookRes.data?.emsg?.trim() || '')
     ) {
       flatTradePositionBook.value = []
       flattradePositionsStale.value = false

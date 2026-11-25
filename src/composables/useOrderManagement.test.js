@@ -1,13 +1,22 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import axios from 'axios'
-import { cancelOrder, closeAllPositions, prepareOrderPayload } from './useOrderManagement'
+import { cancelOrder, closeAllPositions, placeOrder, prepareOrderPayload } from './useOrderManagement'
 import {
   selectedBroker, selectedMasterSymbol, selectedExchange, flatTradePositionBook, toastMessage,
-  selectedProductType, selectedOrderType, selectedQuantity
+  selectedProductType, selectedOrderType, selectedQuantity, selectedCallStrike, lotsPerSymbol
 } from '@/stores/globalStore'
 
 vi.hoisted(() => {
   vi.stubGlobal('localStorage', jsdom.window.localStorage)
+})
+beforeEach(() => {
+  selectedBroker.value = { brokerName: 'Flattrade', clientId: 'test-user' }
+  selectedMasterSymbol.value = 'NIFTY'
+  selectedExchange.value = 'NFO'
+  selectedCallStrike.value = { tradingSymbol: 'NIFTYCE', securityId: '123', lotSize: 75 }
+  selectedOrderType.value = 'MKT'
+  selectedProductType.value = 'M'
+  lotsPerSymbol.value = { NIFTY: 1 }
 })
 afterEach(() => vi.restoreAllMocks())
 
@@ -50,4 +59,35 @@ it('treats a broker cancellation rejection as a failure even with HTTP 200', asy
     'Broker did not acknowledge the cancellation'
   )
   expect(toastMessage.value).toBe('Failed to cancel order')
+})
+
+it('shows the full rejection from the API and does not retry', async () => {
+  const post = vi.spyOn(axios, 'post').mockRejectedValue({
+    response: { data: { message: 'Flattrade rejected the order: insufficient funds' } }
+  })
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  await placeOrder('BUY', 'CALL')
+
+  expect(post).toHaveBeenCalledTimes(1)
+  expect(toastMessage.value).toBe('Flattrade rejected the order: insufficient funds')
+})
+
+it('reports broker rejections returned with HTTP 200', async () => {
+  vi.spyOn(axios, 'post').mockResolvedValue({ data: { stat: 'Not_Ok', emsg: 'Market is closed' } })
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  await placeOrder('BUY', 'CALL')
+
+  expect(toastMessage.value).toBe('Broker rejected the order: Market is closed')
+})
+
+it('warns that a network failure leaves the order status uncertain', async () => {
+  const post = vi.spyOn(axios, 'post').mockRejectedValue(new Error('Network Error'))
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  await placeOrder('BUY', 'CALL')
+
+  expect(post).toHaveBeenCalledTimes(1)
+  expect(toastMessage.value).toMatch(/uncertain.*before retrying/i)
 })
