@@ -26,6 +26,8 @@ import {
   enableTarget,
   stoplossValue,
   targetValue,
+  enableTargetTrail,
+  targetTrailValue,
   limitPrice,
   selectedFlattradePositionsSet,
   selectedShoonyaPositionsSet,
@@ -133,6 +135,9 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     }
     if (enableTarget.value && (!Number.isFinite(Number(targetValue.value)) || Number(targetValue.value) <= 0)) {
       throw new Error('Enabled target must be greater than zero points')
+    }
+    if (enableTargetTrail.value && (!Number.isFinite(Number(targetTrailValue.value)) || Number(targetTrailValue.value) <= 0)) {
+      throw new Error('Enabled target trail must be greater than zero points')
     }
 
     const instrument = quantities.value[selectedMasterSymbol.value]
@@ -247,8 +252,8 @@ export const placeOrder = async (transactionType, drvOptionType) => {
 
     if (!protectionArmed) {
       toastMessage.value = newPosition
-        ? 'Order accepted, but browser stop-loss/target automation was not armed. Verify the position with Flattrade.'
-        : 'Order accepted; waiting for the Flattrade position before browser stop-loss/target automation can arm.'
+        ? 'Order accepted, but server-side stop-loss/target automation was not armed. Verify the position with Flattrade.'
+        : 'Order accepted; waiting for the Flattrade position before server-side stop-loss/target automation can arm.'
       showToast.value = true
     }
 

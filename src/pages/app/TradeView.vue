@@ -3,20 +3,18 @@
   <!-- Brokers, Broker Status, Total Funds, Utilized Margin & Today's Date -->
   <BrokerComponent v-model:selectedBrokerName="selectedBrokerName" :availableBrokers="availableBrokers"
     :brokerStatus="brokerStatus" :availableBalance="availableBalance" :usedAmount="usedAmount"
-    :todayExpirySymbol="todayExpirySymbol" />
+    :todayExpirySymbol="todayExpirySymbol" :refreshing="accountRefreshing"
+    :lastRefreshedAt="accountRefreshedAt" @refresh="refreshAccount" />
 
   <!-- Place Order Form -->
   <section class="row mt-2">
     <form @submit.prevent>
       <div v-if="isServerManaged" class="alert alert-danger">
         Server-managed orders place live NSE derivatives trades and are limited to one contract lot each.
-        Stop-loss/target automation runs in this browser only; keep this page and its market-data connection active.
-        If both protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured.
-        After an automatic exit attempt, verify orders and positions with Flattrade before resetting its safety lock.
-        Locks coordinate tabs in this browser, not other devices or manually submitted orders.
-        <button type="button" class="btn btn-sm btn-outline-danger ms-2" @click="resetExitLocks">
-          Reset automatic-exit locks
-        </button>
+        Stop-loss, target and trailing rules are monitored by the server, so they keep working when this page is closed.
+        If protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured.
+        <strong v-if="riskDryRun">DRY RUN: triggered exits are only logged on the server and no exit order is sent.</strong>
+        <span v-else>Triggered exits place live market orders. Verify fills with Flattrade.</span>
       </div>
       <div v-if="selectedBroker?.brokerName === 'Flattrade' && positionsStale" class="alert alert-danger">
         Position data is stale or unavailable. Last successful refresh:
@@ -144,6 +142,11 @@
                 :class="{ 'disabled-form': isFormDisabled }" />
               <span class="input-group-text">Points</span>
             </div>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="enableTrailingStoploss" v-model="enableTrailingStoploss"
+                :disabled="isFormDisabled" />
+              <label class="form-check-label small" for="enableTrailingStoploss">Trailing stoploss</label>
+            </div>
           </div>
 
           <!-- Predefined Target -->
@@ -158,6 +161,22 @@
               <input type="number" class="form-control form-control-sm" id="targetValue"
                 aria-label="Predefined Target (points)" v-model="targetValue"
                 @wheel.prevent="(e) => handleFormInputMouseScroll(e, { type: 'target' })"
+                :class="{ 'disabled-form': isFormDisabled }" />
+              <span class="input-group-text">Points</span>
+            </div>
+          </div>
+
+          <!-- Target Trailing: each time the target is reached the stoploss moves to it and the target advances -->
+          <div class="col-6 col-md-4 col-lg-3 mt-md-1 mt-lg-2">
+            <label for="enableTargetTrail" class="form-label mb-0 small">Target Trailing</label>
+            <div class="input-group input-group-sm mb-3">
+              <div class="input-group-text">
+                <input class="form-check-input mt-0" type="checkbox" id="enableTargetTrail"
+                  aria-label="Enable Target Trailing" v-model="enableTargetTrail"
+                  :class="{ 'disabled-form': isFormDisabled, 'border-success bg-success': enableTargetTrail }" />
+              </div>
+              <input type="number" min="0" class="form-control form-control-sm" id="targetTrailValue"
+                aria-label="Target trail (points)" v-model="targetTrailValue"
                 :class="{ 'disabled-form': isFormDisabled }" />
               <span class="input-group-text">Points</span>
             </div>
@@ -520,9 +539,9 @@
                 @remove-target="removeTarget" @increase-target="increaseTarget" @decrease-target="decreaseTarget" />
 
               <p class="text-secondary my-2">
-                The targets & stoplosses are stored locally in the browser, they are not sent to the exchange, so if you
-                internet goes down or you close this window, you positons will not close when they hit sl, tsl or
-                target.
+                Stop-losses, trailing stop-losses, targets and target trails are stored and monitored by the server
+                (not by the exchange). They keep working if you close this window, but not if the server or its
+                market-data feed is down.
               </p>
             </div>
 
@@ -656,12 +675,12 @@
 
 <script setup>
 import { usesServerManagedAccount } from '@/config/profile';
-import { computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import BrokerComponent from '@/components/BrokerComponent.vue';
 import { checkAllTokens } from '@/composables/useBrokerTokenValidator';
 import { updateSelectedBrokerOnServer } from '@/api/broker';
-import { fetchFlattradePositions } from '@/composables/usePositionManagement';
+import { fetchFlattradePositions, fetchFundLimit, updateOrdersAndPositions } from '@/composables/usePositionManagement';
 import PositionsTableComponent from '@/components/PositionsTableComponent.vue';
 import OrdersNTradesComponent from '@/components/OrdersNTradesComponent.vue';
 import LtpRangeBarComponent from '@/components/LtpRangeBarComponent.vue';
@@ -670,7 +689,7 @@ import PnlComponent from '@/components/PnlComponent.vue';
 // Global State
 import {
   killSwitchActive, selectedCallStrike, selectedPutStrike, selectedMasterSymbol, shoonyaPositionBook, flatTradePositionBook, selectedBroker, selectedBrokerName, selectedExchange, selectedProductType,
-  selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
+  selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, enableTrailingStoploss, enableTargetTrail, targetTrailValue, riskDryRun, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
   currentTime,
   showLTPRangeBar,
   showOHLCValues,
@@ -718,7 +737,7 @@ import { productTypes, getProductTypeValue, updateAvailableQuantities, orderType
 import { closeAllPositions, cancelPendingOrders, closeSelectedPositions } from '@/composables/useOrderManagement'
 
 // Risk Management Composables
-import { checkStoplossesAndTargets, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget, resetRiskExitLocks } from '@/composables/useRiskManagement'
+import { checkStoplossesAndTargets, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget, syncRiskRules } from '@/composables/useRiskManagement'
 
 // Keyboard Shortcuts Composables
 import { handleHotKeys } from '@/composables/useKeyboardShortcuts'
@@ -778,11 +797,6 @@ import {
 } from '@/composables/usePnlCalculations'
 
 const isServerManaged = usesServerManagedAccount;
-const resetExitLocks = () => {
-  if (window.confirm('Verify all orders and positions in Flattrade first. Reset automatic-exit locks?')) {
-    resetRiskExitLocks();
-  }
-};
 const marketDataStale = computed(
   () => !lastMarketDataAt.value || currentTime.value - lastMarketDataAt.value > 30_000
 )
@@ -825,6 +839,27 @@ const refreshFlattradePositions = async () => {
   }
 };
 
+
+const accountRefreshing = ref(false);
+const accountRefreshedAt = ref(null);
+let accountRefreshInterval;
+
+// Re-validates the Flattrade session and reloads funds, orders and positions.
+const refreshAccount = async () => {
+  if (accountRefreshing.value) return;
+  accountRefreshing.value = true;
+  try {
+    await checkAllTokens();
+    if (selectedBroker.value?.brokerName) {
+      await Promise.all([fetchFundLimit(), updateOrdersAndPositions(), syncRiskRules()]);
+    }
+    accountRefreshedAt.value = Date.now();
+  } catch (error) {
+    console.error('Unable to refresh the account:', error.message);
+  } finally {
+    accountRefreshing.value = false;
+  }
+};
 
 // Lifecycle hooks
 onMounted(async () => {
@@ -905,8 +940,10 @@ onMounted(async () => {
   if (selectedExpiry.value) {
     updateStrikesForExpiry(selectedExpiry.value, true);
   }
+  await syncRiskRules();
   positionCheckInterval = setInterval(checkStoplossesAndTargets, 1000);
   positionRefreshInterval = setInterval(refreshFlattradePositions, 60_000);
+  accountRefreshInterval = setInterval(refreshAccount, 5000);
 });
 
 onBeforeUnmount(() => {
@@ -918,6 +955,7 @@ onBeforeUnmount(() => {
   if (positionCheckInterval) {
     clearInterval(positionCheckInterval);
   }
+  clearInterval(accountRefreshInterval);
   if (positionRefreshInterval) {
     clearInterval(positionRefreshInterval);
   }

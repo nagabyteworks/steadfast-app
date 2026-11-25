@@ -13,6 +13,13 @@
                 'bg-danger': brokerStatus === 'Not Connected',
                 'bg-warning text-color': brokerStatus === 'Token Expired'
             }">{{ brokerStatus }}</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary me-2" :disabled="refreshing"
+                title="Refresh from Flattrade (auto every 5 seconds)" @click="emit('refresh')">
+                <span v-if="refreshing" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span v-else>&#x21bb;</span>
+                Refresh
+            </button>
+            <small v-if="lastRefreshedAt" class="text-muted">{{ new Date(lastRefreshedAt).toLocaleTimeString() }}</small>
         </div>
 
         <!-- Funds -->
@@ -54,9 +61,11 @@ const props = defineProps({
     availableBalance: Number,
     usedAmount: [Number, String],
     todayExpirySymbol: String,
+    refreshing: Boolean,
+    lastRefreshedAt: Number,
 });
 
-const emit = defineEmits(['update:selectedBrokerName']);
+const emit = defineEmits(['update:selectedBrokerName', 'refresh']);
 
 const selectedBroker = computed({
     get: () => props.selectedBrokerName,

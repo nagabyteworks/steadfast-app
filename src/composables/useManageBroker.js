@@ -65,7 +65,6 @@ export function useManageBroker() {
 
     if (broker.brokerName === 'Flattrade') {
       openFlattradeAuthUrl()
-      statusMessage.value = 'Waiting for flattradeReqCode...'
       return
     }
 

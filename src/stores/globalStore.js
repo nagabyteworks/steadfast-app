@@ -1,4 +1,4 @@
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
 
 export const BASE_URL = import.meta.env.VITE_BASE_URL
@@ -136,7 +136,26 @@ export const enableStoploss = useLocalStorage('enableStoploss', false)
 export const stoplossValue = useLocalStorage('stoplossValue', 10)
 export const enableTarget = useLocalStorage('enableTarget', false)
 export const targetValue = useLocalStorage('targetValue', 50)
-export const tslHitPositions = new Set()
+export const enableTrailingStoploss = useLocalStorage('enableTrailingStoploss', false)
+export const enableTargetTrail = useLocalStorage('enableTargetTrail', false)
+export const targetTrailValue = useLocalStorage('targetTrailValue', 5)
+// Server-side stop-loss/target rules keyed by trading symbol, and whether exits are dry-run only.
+export const riskRules = ref({})
+export const riskDryRun = ref(true)
+
+// Trailing stop-loss and target trailing are alternatives; each needs its base setting enabled.
+watch(enableTrailingStoploss, (enabled) => {
+  if (enabled) {
+    enableTargetTrail.value = false
+    enableStoploss.value = true
+  }
+})
+watch(enableTargetTrail, (enabled) => {
+  if (enabled) {
+    enableTrailingStoploss.value = false
+    enableTarget.value = true
+  }
+})
 
 export const symbolData = reactive({
   NIFTY: { exchangeCode: 'NSE', exchangeSecurityId: '26000', expiryDay: 4 }, // Thursday

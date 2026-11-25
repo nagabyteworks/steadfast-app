@@ -48,6 +48,7 @@ import {
   getStatus,
 } from '@/composables/useTradeView'
 
+let authChannel;
 const handleBrokerMessage = (event) => {
   if (isFlattradeAuthMessage(event)) {
     flattradeReqCode.value = event.data.code;
@@ -85,10 +86,19 @@ onMounted(() => {
   }
   // Add event listener for postMessage
   window.addEventListener('message', handleBrokerMessage);
+  authChannel = new BroadcastChannel('flattrade-auth');
+  authChannel.onmessage = (event) => {
+    if (event.data?.type === 'flattradeReqCode' && typeof event.data.code === 'string' && event.data.code) {
+      flattradeReqCode.value = event.data.code;
+    }
+  };
   checkAllTokens();
 });
 
-onUnmounted(() => window.removeEventListener('message', handleBrokerMessage));
+onUnmounted(() => {
+  window.removeEventListener('message', handleBrokerMessage);
+  authChannel?.close();
+});
 
 
 
