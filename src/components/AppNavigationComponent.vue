@@ -19,6 +19,7 @@
         </button>
         <!-- Always-on Notification Area -->
         <div class="notification-area d-flex align-items-center ms-3 d-lg-none">
+          <AccountRefreshButton class="me-2" />
           <NotificationComponent
             v-model:showToast="showToast"
             v-model:message="toastMessage"
@@ -46,6 +47,7 @@
           </ul>
           <!-- Always-on Notification Area -->
           <div class="notification-area d-none d-lg-flex align-items-center ms-3">
+            <AccountRefreshButton class="me-2" />
             <NotificationComponent
               v-model:showToast="showToast"
               v-model:message="toastMessage"
@@ -63,6 +65,7 @@ import { ref } from 'vue'
 import { FontAwesomeIcon } from '@/font-awesome'
 import { useRouter } from 'vue-router'
 import NotificationComponent from './NotificationComponent.vue'
+import AccountRefreshButton from './AccountRefreshButton.vue'
 
 // Global State
 import { notificationSound, toastMessage, showToast } from '@/stores/globalStore'

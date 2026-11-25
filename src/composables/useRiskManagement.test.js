@@ -77,6 +77,21 @@ it('keeps trailing stop-loss and target trailing mutually exclusive', async () =
   })
 })
 
+it('only allows target trailing while the predefined target is enabled', async () => {
+  enableTarget.value = false
+  enableTargetTrail.value = true
+  await vi.waitFor(() => expect(enableTargetTrail.value).toBe(false))
+
+  enableTarget.value = true
+  await nextTick()
+  enableTargetTrail.value = true
+  await nextTick()
+  expect(enableTargetTrail.value).toBe(true)
+
+  enableTarget.value = false
+  await vi.waitFor(() => expect(enableTargetTrail.value).toBe(false))
+})
+
 it('does not apply a trailing stop-loss to a target-trailing rule', () => {
   riskRules.value = {
     NIFTYCE: { tsym: 'NIFTYCE', status: 'armed', mode: 'target_trail', slPrice: 90, targetPrice: 120, trailPoints: 5 }

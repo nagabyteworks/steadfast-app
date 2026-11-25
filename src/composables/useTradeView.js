@@ -1,4 +1,3 @@
-import { usesServerManagedAccount } from '@/config/profile'
 import { ref, computed, watch } from 'vue'
 import { debounce } from 'lodash'
 import { getBrokerStatus } from '@/composables/useBrokerTokenValidator'
@@ -182,9 +181,8 @@ export const todayExpirySymbol = computed(() => {
 })
 
 export const maxLots = computed(() => {
-  if (usesServerManagedAccount) return 1
   const instrument = quantities.value[selectedMasterSymbol.value]
-  return instrument ? instrument.maxLots : 280
+  return instrument ? instrument.maxLots : 10
 })
 export const combinedOrdersAndTrades = computed(() => {
   const combined = {}
@@ -232,7 +230,9 @@ export const combinedOrdersAndTrades = computed(() => {
   })
 })
 
-export const previousOrderType = ref(orderTypes.value[0])
+const defaultOrderType = () =>
+  orderTypes.value.includes('LMT_LTP') ? 'LMT_LTP' : orderTypes.value[0]
+export const previousOrderType = ref(defaultOrderType())
 
 export const ltpRangeWidth = computed(() => {
   const low = parseFloat(masterLowPrice.value)
@@ -445,14 +445,14 @@ export const handleOrderClick = async (transactionType, optionType) => {
   }
 }
 export const resetOrderTypeIfNeeded = () => {
-  if (previousOrderType.value === orderTypes.value[0]) {
+  if (previousOrderType.value === defaultOrderType()) {
     // Check if previousOrderType is MARKET or MKT
     resetOrderType()
   }
 }
 
 export const resetOrderType = () => {
-  selectedOrderType.value = orderTypes.value[0] // Set selectedOrderType to MARKET or MKT based on broker
+  selectedOrderType.value = defaultOrderType()
 }
 
 export const updateTradingSymbol = (strike) => {
@@ -646,8 +646,8 @@ watch(selectedBrokerName, () => {
 watch(selectedBroker, async (newBroker) => {
   if (newBroker) {
     try {
-      selectedOrderType.value = orderTypes.value[0]
-      previousOrderType.value = orderTypes.value[0]
+      selectedOrderType.value = defaultOrderType()
+      previousOrderType.value = defaultOrderType()
 
       // Only set product type if it's not already set
       if (!selectedProductType.value) {

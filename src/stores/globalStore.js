@@ -1,4 +1,4 @@
-import { ref, reactive, watch } from 'vue'
+import { ref, shallowRef, reactive, watch } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
 
 export const BASE_URL = import.meta.env.VITE_BASE_URL
@@ -52,12 +52,12 @@ export const flattradePositionsLastUpdatedAt = ref(null)
 export const shoonyaPositionBook = ref([])
 export const fundLimits = ref({})
 export const quantities = ref({
-  NIFTY: { lotSize: 75, maxLots: 360, freezeLimit: 72 },
-  BANKNIFTY: { lotSize: 15, maxLots: 300, freezeLimit: 60 },
-  FINNIFTY: { lotSize: 25, maxLots: 360, freezeLimit: 72 },
-  MIDCPNIFTY: { lotSize: 50, maxLots: 280, freezeLimit: 56 },
-  SENSEX: { lotSize: 10, maxLots: 500, freezeLimit: 100 },
-  BANKEX: { lotSize: 15, maxLots: 300, freezeLimit: 60 }
+  NIFTY: { lotSize: 75, maxLots: 10, freezeLimit: 72 },
+  BANKNIFTY: { lotSize: 15, maxLots: 10, freezeLimit: 60 },
+  FINNIFTY: { lotSize: 25, maxLots: 10, freezeLimit: 72 },
+  MIDCPNIFTY: { lotSize: 50, maxLots: 10, freezeLimit: 56 },
+  SENSEX: { lotSize: 10, maxLots: 10, freezeLimit: 100 },
+  BANKEX: { lotSize: 15, maxLots: 10, freezeLimit: 60 }
 })
 export const availableQuantities = ref([])
 export const selectedStrike = ref({})
@@ -84,6 +84,10 @@ export const latestPutLTP = ref('N/A')
 export const defaultCallSecurityId = ref(null)
 export const defaultPutSecurityId = ref(null)
 export const positionLTPs = ref({})
+// Percentage change versus the previous close, as reported by the broker feed
+export const callPercentChange = ref(null)
+export const putPercentChange = ref(null)
+export const positionPercentChanges = ref({})
 export const positionSecurityIds = ref({})
 export const totalRiskType = ref(null)
 export const totalRiskTypeToggle = ref(false)
@@ -126,17 +130,18 @@ export const targets = useLocalStorage('targets', {})
 export const trailingStoplosses = useLocalStorage('trailingStoplosses', {})
 
 export const enableStoploss = useLocalStorage('enableStoploss', false)
-export const stoplossValue = useLocalStorage('stoplossValue', 10)
+export const stoplossValue = useLocalStorage('stoplossValue', 20)
 export const enableTarget = useLocalStorage('enableTarget', false)
-export const targetValue = useLocalStorage('targetValue', 50)
+export const targetValue = useLocalStorage('targetValue', 20)
 export const enableTrailingStoploss = useLocalStorage('enableTrailingStoploss', false)
 export const enableTargetTrail = useLocalStorage('enableTargetTrail', false)
-export const targetTrailValue = useLocalStorage('targetTrailValue', 5)
+export const targetTrailValue = useLocalStorage('targetTrailValue', 10)
 // Server-side stop-loss/target rules keyed by trading symbol, and whether exits are dry-run only.
 export const riskRules = ref({})
 export const riskDryRun = ref(true)
 
 // Trailing stop-loss and target trailing are alternatives; each needs its base setting enabled.
+// Target trailing additionally requires the predefined target to stay enabled.
 watch(enableTrailingStoploss, (enabled) => {
   if (enabled) {
     enableTargetTrail.value = false
@@ -144,10 +149,15 @@ watch(enableTrailingStoploss, (enabled) => {
   }
 })
 watch(enableTargetTrail, (enabled) => {
-  if (enabled) {
-    enableTrailingStoploss.value = false
-    enableTarget.value = true
+  if (!enabled) return
+  if (!enableTarget.value) {
+    enableTargetTrail.value = false
+    return
   }
+  enableTrailingStoploss.value = false
+})
+watch(enableTarget, (enabled) => {
+  if (!enabled) enableTargetTrail.value = false
 })
 
 export const symbolData = reactive({
@@ -186,7 +196,7 @@ export const selectedBrokerToDelete = ref(null) // Store the broker to be delete
 export const savedStickyMTM = localStorage.getItem('stickyMTM')
 export const stickyMTM = ref(savedStickyMTM ? JSON.parse(savedStickyMTM) : false)
 export const userId = localStorage.getItem('userId')
-export const selectedOrderType = ref('MKT')
+export const selectedOrderType = ref('LMT_LTP')
 export const currentSubscriptions = ref({
   masterSymbol: null,
   masterSymbolExchangeCode: null,
@@ -201,3 +211,8 @@ export const INITIAL_RECONNECT_DELAY = 1000
 export const reconnectAttempts = ref(0)
 export const reconnectTimeout = ref(null)
 export const wsConnectionState = ref('disconnected')
+
+// Account refresh state shared with the navigation bar; the Trade page registers the handler
+export const accountRefreshing = ref(false)
+export const accountRefreshedAt = ref(null)
+export const accountRefreshHandler = shallowRef(null)

@@ -3,8 +3,7 @@
   <!-- Brokers, Broker Status, Total Funds, Utilized Margin & Today's Date -->
   <BrokerComponent v-model:selectedBrokerName="selectedBrokerName" :availableBrokers="availableBrokers"
     :brokerStatus="brokerStatus" :availableBalance="availableBalance" :usedAmount="usedAmount"
-    :todayExpirySymbol="todayExpirySymbol" :refreshing="accountRefreshing"
-    :lastRefreshedAt="accountRefreshedAt" @refresh="refreshAccount" />
+    :todayExpirySymbol="todayExpirySymbol" />
 
   <!-- Place Order Form -->
   <section class="row mt-2">
@@ -171,11 +170,12 @@
             <div class="input-group input-group-sm mb-3">
               <div class="input-group-text">
                 <input class="form-check-input mt-0" type="checkbox" id="enableTargetTrail"
-                  aria-label="Enable Target Trailing" v-model="enableTargetTrail"
+                  aria-label="Enable Target Trailing" v-model="enableTargetTrail" :disabled="!enableTarget"
+                  title="Enable Predefined Target first"
                   :class="{ 'border-success bg-success': enableTargetTrail }" />
               </div>
               <input type="number" min="0" class="form-control form-control-sm" style="min-width: 0; max-width: 70px;" id="targetTrailValue"
-                aria-label="Target trail (points)" v-model="targetTrailValue"
+                aria-label="Target trail (points)" v-model="targetTrailValue" :disabled="!enableTarget"
                 />
               <span class="input-group-text">Points</span>
             </div>
@@ -222,6 +222,7 @@
                     'text-danger': parseFloat(latestCallLTP) < parseFloat(callOpenPrice)
                   }">{{ latestCallLTP }}
                   </span>
+                  <small v-if="callPercentChange !== null" class="ms-1" :class="callPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(callPercentChange) }})</small>
                 </span>
 
                 <span class="ms-2 fw-bold text-secondary">
@@ -329,6 +330,7 @@
                     'text-danger': parseFloat(latestPutLTP) < parseFloat(putOpenPrice)
                   }">{{ latestPutLTP }}
                   </span>
+                  <small v-if="putPercentChange !== null" class="ms-1" :class="putPercentChange >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(putPercentChange) }})</small>
                 </span>
               </div>
             </div>
@@ -655,7 +657,7 @@ import PnlComponent from '@/components/PnlComponent.vue';
 // Global State
 import {
   selectedCallStrike, selectedPutStrike, selectedMasterSymbol, shoonyaPositionBook, flatTradePositionBook, selectedBroker, selectedBrokerName, selectedExchange, selectedProductType,
-  selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, enableTrailingStoploss, enableTargetTrail, targetTrailValue, riskDryRun, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
+  accountRefreshing, accountRefreshedAt, accountRefreshHandler, selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, enableTrailingStoploss, enableTargetTrail, targetTrailValue, riskDryRun, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
   currentTime,
   showLTPRangeBar,
   showOHLCValues,
@@ -673,6 +675,8 @@ import {
   modalOptionType,
   latestCallLTP,
   latestPutLTP,
+  callPercentChange,
+  putPercentChange,
   activeFetchFunction,
   masterOpenPrice,
   masterHighPrice,
@@ -760,6 +764,7 @@ import {
 } from '@/composables/usePnlCalculations'
 
 const isServerManaged = usesServerManagedAccount;
+const formatPercent = (value) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 const marketDataStale = computed(
   () => !lastMarketDataAt.value || currentTime.value - lastMarketDataAt.value > 30_000
 )
@@ -803,8 +808,6 @@ const refreshFlattradePositions = async () => {
 };
 
 
-const accountRefreshing = ref(false);
-const accountRefreshedAt = ref(null);
 let accountRefreshInterval;
 
 // Re-validates the Flattrade session and reloads funds, orders and positions.
@@ -906,6 +909,7 @@ onMounted(async () => {
   positionCheckInterval = setInterval(checkStoplossesAndTargets, 1000);
   positionRefreshInterval = setInterval(refreshFlattradePositions, 60_000);
   accountRefreshInterval = setInterval(refreshAccount, 5000);
+  accountRefreshHandler.value = refreshAccount;
 });
 
 onBeforeUnmount(() => {
@@ -918,6 +922,7 @@ onBeforeUnmount(() => {
     clearInterval(positionCheckInterval);
   }
   clearInterval(accountRefreshInterval);
+  accountRefreshHandler.value = null;
   if (positionRefreshInterval) {
     clearInterval(positionRefreshInterval);
   }

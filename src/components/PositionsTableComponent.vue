@@ -8,9 +8,9 @@
                     <th scope="col">Symbol</th>
                     <th scope="col">Qty</th>
                     <th scope="col">Side</th>
-                    <th scope="col">TSL / SL</th>
+                    <th scope="col" style="width: 1%;">TSL / SL</th>
                     <th scope="col">LTP</th>
-                    <th scope="col">Target</th>
+                    <th scope="col" style="width: 1%;">Target</th>
                     <th scope="col">Type</th>
                     <th scope="col">B.Avg</th>
                     <th scope="col">S.Avg</th>
@@ -42,10 +42,10 @@
                             {{ position.netqty > 0 ? 'BUY' : position.netqty < 0 ? 'SELL' : '-' }} </td>
                         <td v-if="position.netqty != 0">
                             <!-- SL & TSL -->
-                            <div class="row" style="height: 30px;">
+                            <div class="row" style="height: 24px;">
                                 <div class="col-12" v-if="trailingStoplosses[position.tsym] !== null">
                                     <div class="d-flex align-items-center">
-                                        <span class="me-2">TSL:</span>
+                                        <span class="me-1 small">TSL:</span>
                                         <span class="bg-danger text-white px-2 py-1 rounded">
                                             {{ trailingStoplosses[position.tsym] }}
                                         </span>
@@ -68,20 +68,20 @@
                                 </div>
                                 <div v-else>-</div>
                             </div>
-                            <div class="btn-group mt-2" role="group" style="width: 165px;">
-                                <button class="btn btn-sm btn-outline"
+                            <div class="btn-group mt-1" role="group">
+                                <button class="btn btn-outline btn-xs"
                                     v-if="trailingStoplosses[position.tsym] === null && stoplosses[position.tsym] === null"
                                     @click="$emit('set-stoploss', position, 'static')">
                                     ➕
                                 </button>
-                                <button class="btn btn-sm btn-outline"
+                                <button class="btn btn-outline btn-xs"
                                     v-if="trailingStoplosses[position.tsym] !== null || stoplosses[position.tsym] !== null"
                                     @click="$emit('set-stoploss', position, trailingStoplosses[position.tsym] !== null ? 'convert_to_sl' : 'convert_to_tsl')">
                                     {{ trailingStoplosses[position.tsym] !== null ? 'S' : 'T' }}
                                 </button>
                                 <button
                                     v-if="trailingStoplosses[position.tsym] !== null || stoplosses[position.tsym] !== null"
-                                    class="btn btn-sm btn-outline" @click="$emit('remove-stoploss', position)">
+                                    class="btn btn-outline btn-xs" @click="$emit('remove-stoploss', position)">
                                     ❌
                                 </button>
                             </div>
@@ -90,10 +90,14 @@
                         <td style="width: 80px;"
                             :class="{ 'text-success': parseFloat(positionLTPs[position.tsym]) > parseFloat(position.totbuyavgprc), 'text-danger': parseFloat(positionLTPs[position.tsym]) < parseFloat(position.totbuyavgprc) }">
                             {{ positionLTPs[position.tsym] }}
+                            <div v-if="positionPercentChanges[position.tsym] !== undefined" class="small"
+                                :class="positionPercentChanges[position.tsym] >= 0 ? 'text-success' : 'text-danger'">
+                                {{ formatPercent(positionPercentChanges[position.tsym]) }}
+                            </div>
                         </td>
                         <td v-if="position.netqty != 0">
                             <!-- TG -->
-                            <div class="row" style="height: 30px;">
+                            <div class="row" style="height: 24px;">
                                 <div class="col-12" v-if="targets[position.tsym] !== null">
                                     <div class="btn-group" role="group">
                                         <button class="btn btn-outline-danger btn-xs"
@@ -111,12 +115,12 @@
                                 </div>
                                 <div v-else>-</div>
                             </div>
-                            <div class="btn-group mt-2" role="group" style="width: 165px;">
-                                <button class="btn btn-sm btn-outline" v-if="targets[position.tsym] === null"
+                            <div class="btn-group mt-1" role="group">
+                                <button class="btn btn-outline btn-xs" v-if="targets[position.tsym] === null"
                                     @click="$emit('set-target', position)">
                                     ➕
                                 </button>
-                                <button class="btn btn-sm btn-outline" v-if="targets[position.tsym] !== null"
+                                <button class="btn btn-outline btn-xs" v-if="targets[position.tsym] !== null"
                                     @click="$emit('remove-target', position)">
                                     ❌
                                 </button>
@@ -171,14 +175,16 @@
                         <small>Qty: {{ position.netqty }}</small>
                     </div>
                     <div>
-                        <small>LTP: {{ positionLTPs[position.tsym] }}</small>
+                        <small>LTP: {{ positionLTPs[position.tsym] }}
+                            <span v-if="positionPercentChanges[position.tsym] !== undefined"
+                                :class="positionPercentChanges[position.tsym] >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(positionPercentChanges[position.tsym]) }})</span></small>
                     </div>
                 </div>
 
                 <!-- SL & TSL -->
                 <div v-if="position.netqty != 0" class="mb-2">
                     <div v-if="trailingStoplosses[position.tsym] !== null" class="d-flex align-items-center">
-                        <span class="me-2">TSL:</span>
+                        <span class="me-1 small">TSL:</span>
                         <span class="bg-danger text-white px-2 py-1 rounded">
                             {{ trailingStoplosses[position.tsym] }}
                         </span>
@@ -233,6 +239,7 @@
 </template>
 
 <script setup>
+const formatPercent = (value) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
 import { positionsWithCalculatedProfit } from '@/composables/usePnlCalculations';
 import { computed, watch } from 'vue';
 
@@ -268,7 +275,7 @@ const emit = defineEmits([
 import { formatTradingSymbol } from '@/composables/useFormatters';
 
 // Global State
-import { positionLTPs, stoplosses, targets, trailingStoplosses } from '@/stores/globalStore'
+import { positionLTPs, positionPercentChanges, stoplosses, targets, trailingStoplosses } from '@/stores/globalStore'
 
 
 const sortedPositions = computed(() => {

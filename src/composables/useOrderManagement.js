@@ -32,7 +32,8 @@ import {
   selectedFlattradePositionsSet,
   selectedShoonyaPositionsSet,
   latestCallLTP,
-  latestPutLTP
+  latestPutLTP,
+  positionLTPs
 } from '@/stores/globalStore'
 
 // Trade Configuration Composables
@@ -65,6 +66,19 @@ const getCurrentLTP = (optionType) => {
   }
   return price
 }
+// Flattrade rejects MKT orders from the API (ALGO_CHK), so a "market" order is sent as a
+// limit order priced through the market by a small buffer.
+const MAX_LOTS = 10
+const MARKET_BUFFER = 0.02
+export const marketableLimitPrice = (ltp, transactionType) => {
+  const price = Number(ltp)
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error('Current price is unavailable; order was not sent')
+  }
+  const selling = transactionType === 'S' || transactionType === 'SELL'
+  const ticks = (price * (selling ? 1 - MARKET_BUFFER : 1 + MARKET_BUFFER)) / 0.05
+  return Math.max(0.05, (selling ? Math.floor(ticks) : Math.ceil(ticks)) * 0.05).toFixed(2)
+}
 export const prepareOrderPayload = (
   transactionType,
   drvOptionType,
@@ -83,6 +97,11 @@ export const prepareOrderPayload = (
       price = getCurrentLTP(drvOptionType).toString()
       priceType = 'LMT'
       break
+    default:
+      if (selectedBroker.value?.brokerName === 'Flattrade') {
+        price = marketableLimitPrice(getCurrentLTP(drvOptionType), transactionType)
+        priceType = 'LMT'
+      }
   }
 
   const commonPayload = {
@@ -145,11 +164,11 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     if (usesServerManagedAccount && (!Number.isSafeInteger(liveLotSize) || liveLotSize <= 0)) {
       throw new Error('NSE contract lot size is unavailable; order was not sent')
     }
-    const freezeLimit = usesServerManagedAccount ? 1 : instrument.freezeLimit
-    const orderLots = usesServerManagedAccount ? 1 : selectedLots.value
-    const fullOrderQuantity = usesServerManagedAccount ? liveLotSize : selectedQuantity.value
+    const freezeLimit = usesServerManagedAccount ? MAX_LOTS : instrument.freezeLimit
+    const orderLots = selectedLots.value
+    const fullOrderQuantity = usesServerManagedAccount ? orderLots * liveLotSize : selectedQuantity.value
     if (usesServerManagedAccount) {
-      selectedQuantity.value = liveLotSize
+      selectedQuantity.value = fullOrderQuantity
     }
 
     let remainingLots = orderLots
@@ -157,7 +176,7 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     while (remainingLots > 0) {
       const lotsToPlace = Math.min(remainingLots, freezeLimit)
       const quantityToPlace = usesServerManagedAccount
-        ? liveLotSize
+        ? lotsToPlace * liveLotSize
         : lotsToPlace * instrument.lotSize
 
       const orderData = prepareOrderPayload(
@@ -278,7 +297,7 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
     const quantity = Math.abs(Number(position.netQty || position.netqty))
     const instrument = quantities.value[selectedMasterSymbol.value]
     const freezeLimit = usesServerManagedAccount
-      ? Number(position.ls)
+      ? Number(position.ls) * MAX_LOTS
       : instrument.freezeLimit * instrument.lotSize
     if (!Number.isSafeInteger(freezeLimit) || freezeLimit <= 0) {
       throw new Error('Position lot size is unavailable; close order was not sent')
@@ -311,6 +330,10 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
           trantype: transactionType,
           prctyp: 'MKT',
           ret: 'DAY'
+        }
+        if (selectedBroker.value?.brokerName === 'Flattrade') {
+          orderData.prc = marketableLimitPrice(positionLTPs.value[position.tsym], transactionType)
+          orderData.prctyp = 'LMT'
         }
       }
 

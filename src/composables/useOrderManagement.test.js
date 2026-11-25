@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import axios from 'axios'
-import { cancelOrder, closeAllPositions, placeOrder, prepareOrderPayload } from './useOrderManagement'
+import { cancelOrder, closeAllPositions, placeOrder, placeOrderForPosition, prepareOrderPayload } from './useOrderManagement'
 import {
   selectedBroker, selectedMasterSymbol, selectedExchange, flatTradePositionBook, toastMessage,
   selectedProductType, selectedOrderType, selectedQuantity, selectedCallStrike, lotsPerSymbol,
-  latestCallLTP, latestPutLTP
+  latestCallLTP, latestPutLTP, positionLTPs
 } from '@/stores/globalStore'
 
 vi.hoisted(() => {
@@ -18,6 +18,7 @@ beforeEach(() => {
   selectedOrderType.value = 'MKT'
   selectedProductType.value = 'M'
   lotsPerSymbol.value = { NIFTY: 1 }
+  latestCallLTP.value = '100'
 })
 afterEach(() => vi.restoreAllMocks())
 
@@ -25,6 +26,7 @@ it('preserves buy/sell and intraday/margin when using encoded modal values', () 
   selectedBroker.value = { brokerName: 'Flattrade', clientId: 'test-user' }
   selectedOrderType.value = 'MKT'
   selectedQuantity.value = 50
+  latestCallLTP.value = '100'
   const strike = { tradingSymbol: 'NIFTYCE' }
 
   selectedProductType.value = 'I'
@@ -36,6 +38,16 @@ it('preserves buy/sell and intraday/margin when using encoded modal values', () 
   expect(prepareOrderPayload('S', 'CALL', strike, 'NFO')).toMatchObject({
     trantype: 'S', prd: 'M'
   })
+})
+
+it('sends Flattrade market orders as marketable limit orders because the API rejects MKT', () => {
+  selectedOrderType.value = 'MKT'
+  latestCallLTP.value = '100'
+  const strike = { tradingSymbol: 'NIFTYCE' }
+  expect(prepareOrderPayload('B', 'CALL', strike, 'NFO')).toMatchObject({ prctyp: 'LMT', prc: '102.00' })
+  expect(prepareOrderPayload('S', 'CALL', strike, 'NFO')).toMatchObject({ prctyp: 'LMT', prc: '98.00' })
+  latestCallLTP.value = 'N/A'
+  expect(() => prepareOrderPayload('B', 'CALL', strike, 'NFO')).toThrow('price is unavailable')
 })
 
 it('uses the selected option price for limit-at-LTP and rejects unavailable prices', () => {
@@ -60,6 +72,17 @@ it('does not report positions closed when the trading gate rejects the close ord
   await closeAllPositions()
 
   expect(toastMessage.value).toBe('Failed to close all positions')
+})
+
+it('closes Flattrade positions with a marketable limit order', async () => {
+  flatTradePositionBook.value = [{ tsym: 'NIFTYCE', netqty: '75', prd: 'M', ls: '75' }]
+  positionLTPs.value = { NIFTYCE: '50' }
+  const post = vi.spyOn(axios, 'post').mockResolvedValue({ data: { stat: 'Ok', norenordno: '1' } })
+
+  await placeOrderForPosition('S', 'CALL', flatTradePositionBook.value[0])
+
+  expect(post.mock.calls[0][1]).toContain('prctyp=LMT')
+  expect(post.mock.calls[0][1]).toContain('prc=49.00')
 })
 
 it('treats a broker cancellation rejection as a failure even with HTTP 200', async () => {

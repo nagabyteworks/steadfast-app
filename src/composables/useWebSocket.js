@@ -24,6 +24,9 @@ import {
   bankexPrice,
   latestCallLTP,
   latestPutLTP,
+  callPercentChange,
+  putPercentChange,
+  positionPercentChanges,
   positionSecurityIds,
   positionLTPs,
   masterOpenPrice,
@@ -294,7 +297,17 @@ export const updateMasterSymbolPrice = (quoteData) => {
   }
 }
 
+// Ticks are partial updates; undefined means this tick carries no change figure
+const readPercentChange = (quoteData) => {
+  const value = quoteData.pc !== undefined ? Number(quoteData.pc) : NaN
+  if (Number.isFinite(value)) return value
+  const close = Number(quoteData.c)
+  const last = Number(quoteData.lp)
+  return close > 0 && Number.isFinite(last) ? ((last - close) / close) * 100 : undefined
+}
+
 export const updateOptionPrices = (quoteData) => {
+  const percentChange = readPercentChange(quoteData)
   const newPrice = parseFloat(quoteData.lp)
   if (isNaN(newPrice)) {
     console.warn('Invalid option price received:', quoteData.lp)
@@ -303,10 +316,12 @@ export const updateOptionPrices = (quoteData) => {
 
   if (quoteData.tk === defaultCallSecurityId.value) {
     latestCallLTP.value = newPrice
+    if (percentChange !== undefined) callPercentChange.value = percentChange
     // console.log('Updated Call LTP:', newPrice)
     updateOHLCIfNotEmpty('call', quoteData)
   } else if (quoteData.tk === defaultPutSecurityId.value) {
     latestPutLTP.value = newPrice
+    if (percentChange !== undefined) putPercentChange.value = percentChange
     // console.log('Updated Put LTP:', newPrice)
     updateOHLCIfNotEmpty('put', quoteData)
   }
@@ -324,6 +339,10 @@ export const updatePositionLTPs = (quoteData) => {
       positionLTPs.value = {
         ...positionLTPs.value,
         [positionTsym]: newPrice
+      }
+      const percentChange = readPercentChange(quoteData)
+      if (percentChange !== undefined) {
+        positionPercentChanges.value = { ...positionPercentChanges.value, [positionTsym]: percentChange }
       }
       // console.log(`Updated LTP for position ${positionTsym}:`, newPrice)
     } else {
