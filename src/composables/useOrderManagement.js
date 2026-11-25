@@ -27,7 +27,9 @@ import {
   targetValue,
   limitPrice,
   selectedFlattradePositionsSet,
-  selectedShoonyaPositionsSet
+  selectedShoonyaPositionsSet,
+  latestCallLTP,
+  latestPutLTP
 } from '@/stores/globalStore'
 
 // Trade Configuration Composables
@@ -53,6 +55,14 @@ import {
   setTarget
 } from '@/composables/useRiskManagement'
 
+const getCurrentLTP = (optionType) => {
+  const price = Number(optionType === 'CALL' ? latestCallLTP.value : latestPutLTP.value)
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error('Current option price is unavailable; order was not sent')
+  }
+  return price
+}
+
 export const prepareOrderPayload = (
   transactionType,
   drvOptionType,
@@ -68,7 +78,7 @@ export const prepareOrderPayload = (
       priceType = 'LMT'
       break
     case 'LMT_LTP':
-      price = getCurrentLTP().toString()
+      price = getCurrentLTP(drvOptionType).toString()
       priceType = 'LMT'
       break
   }
@@ -155,7 +165,7 @@ export const placeOrder = async (transactionType, drvOptionType) => {
 
       // Handle dynamic price updates for LMT_LTP
       if (['LMT_LTP'].includes(selectedOrderType.value)) {
-        const currentLTP = getCurrentLTP()
+        const currentLTP = getCurrentLTP(drvOptionType)
         orderData.prc = currentLTP.toString()
       }
 

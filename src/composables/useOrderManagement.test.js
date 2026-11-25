@@ -3,7 +3,8 @@ import axios from 'axios'
 import { cancelOrder, closeAllPositions, placeOrder, prepareOrderPayload } from './useOrderManagement'
 import {
   selectedBroker, selectedMasterSymbol, selectedExchange, flatTradePositionBook, toastMessage,
-  selectedProductType, selectedOrderType, selectedQuantity, selectedCallStrike, lotsPerSymbol
+  selectedProductType, selectedOrderType, selectedQuantity, selectedCallStrike, lotsPerSymbol,
+  latestCallLTP, latestPutLTP
 } from '@/stores/globalStore'
 
 vi.hoisted(() => {
@@ -30,10 +31,22 @@ it('preserves buy/sell and intraday/margin when using encoded modal values', () 
   expect(prepareOrderPayload('B', 'CALL', strike, 'NFO')).toMatchObject({
     trantype: 'B', prd: 'I'
   })
+
   selectedProductType.value = 'M'
   expect(prepareOrderPayload('S', 'CALL', strike, 'NFO')).toMatchObject({
     trantype: 'S', prd: 'M'
   })
+})
+
+it('uses the selected option price for limit-at-LTP and rejects unavailable prices', () => {
+  selectedOrderType.value = 'LMT_LTP'
+  latestCallLTP.value = '123.45'
+  latestPutLTP.value = '87.65'
+  const strike = { tradingSymbol: 'NIFTYCE' }
+  expect(prepareOrderPayload('BUY', 'CALL', strike, 'NFO').prc).toBe('123.45')
+  expect(prepareOrderPayload('BUY', 'PUT', strike, 'NFO').prc).toBe('87.65')
+  latestCallLTP.value = 'N/A'
+  expect(() => prepareOrderPayload('BUY', 'CALL', strike, 'NFO')).toThrow('Current option price is unavailable')
 })
 
 it('does not report positions closed when the trading gate rejects the close order', async () => {
