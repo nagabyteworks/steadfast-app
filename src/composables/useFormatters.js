@@ -45,7 +45,14 @@ export const formatTradingSymbol = (symbol, excludeStrikePrice = false) => {
   // - (\d{2})    : Date (18)
   // - (\d+)      : Strike price (1400)
   // - ([CP]E)    : Option type (CE for Call, PE for Put)
-  const pattern2 = /^(\w+)(\d{2})([A-Z]{1,3})(\d{2})(\d+)([CP]E)$/
+  const pattern2 = /^([A-Z]+)(\d{2})([A-Z0-9])(\d{2})(\d+)([CP]E)$/
+
+  // Pattern 3: BFO monthly symbols without a day, like SENSEX26NOV85000CE or BANKEX26DEC79600PE
+  const monthlyMatch = symbol.match(/^([A-Z]+)(\d{2})([A-Z]{3})(\d+)(CE|PE)$/)
+  if (monthlyMatch) {
+    const [, index, year, month, strikePrice, optionType] = monthlyMatch
+    return `${index} ${month}${year} ${optionType === 'CE' ? 'CALL' : 'PUT'}${excludeStrikePrice ? '' : ' ' + strikePrice}`
+  }
 
   // Try to match the symbol against both patterns
   const match1 = symbol.match(pattern1)

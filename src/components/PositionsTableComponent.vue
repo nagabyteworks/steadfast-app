@@ -76,6 +76,7 @@
                                 <button class="btn btn-outline btn-xs"
                                     v-if="trailingStoplosses[position.tsym] !== null || stoplosses[position.tsym] !== null"
                                     :class="{ active: trailingStoplosses[position.tsym] !== null }"
+                                    :disabled="targetTrailing[position.tsym]"
                                     @click="$emit('set-stoploss', position, trailingStoplosses[position.tsym] !== null ? 'convert_to_sl' : 'convert_to_tsl')">
                                     {{ trailingStoplosses[position.tsym] !== null ? 'S' : 'T' }}
                                 </button>
@@ -89,7 +90,7 @@
                         <td v-else>-</td>
                         <td style="width: 80px;"
                             :class="{ 'text-success': parseFloat(positionLTPs[position.tsym]) > parseFloat(position.totbuyavgprc), 'text-danger': parseFloat(positionLTPs[position.tsym]) < parseFloat(position.totbuyavgprc) }">
-                            {{ formatPrice(positionLTPs[position.tsym]) }}
+                            {{ formatPrice(positionLTPs[position.tsym] ?? position.lp) }}
                             <div v-if="positionPercentChanges[position.tsym] !== undefined" class="small"
                                 :class="positionPercentChanges[position.tsym] >= 0 ? 'text-success' : 'text-danger'">
                                 {{ formatPercent(positionPercentChanges[position.tsym]) }}
@@ -121,6 +122,7 @@
                                 </button>
                                 <button class="btn btn-outline btn-xs" v-if="targets[position.tsym] !== null"
                                     :class="{ active: targetTrailing[position.tsym] }" title="Trailing target"
+                                    :disabled="trailingStoplosses[position.tsym] !== null"
                                     @click="$emit('toggle-target-trail', position)">
                                     T
                                 </button>
@@ -179,10 +181,19 @@
                         <small>Qty: {{ position.netqty }}</small>
                     </div>
                     <div>
-                        <small>LTP: {{ formatPrice(positionLTPs[position.tsym]) }}
+                        <small>LTP: {{ formatPrice(positionLTPs[position.tsym] ?? position.lp) }}
                             <span v-if="positionPercentChanges[position.tsym] !== undefined"
                                 :class="positionPercentChanges[position.tsym] >= 0 ? 'text-success' : 'text-danger'">({{ formatPercent(positionPercentChanges[position.tsym]) }})</span></small>
                     </div>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-between small text-muted mb-2 gap-2">
+                    <span>{{ formatProductType(position.prd) }}</span>
+                    <span>B.Avg: {{ formatPrice(position.totbuyavgprc) }}</span>
+                    <span>S.Avg: {{ formatPrice(position.totsellavgprc) }}</span>
+                    <span :class="position.rpnl > 0 ? 'text-success' : position.rpnl < 0 ? 'text-danger' : null">
+                        Realized: {{ formatPrice(position.rpnl) }}
+                    </span>
                 </div>
 
                 <!-- SL, TSL & Target -->
@@ -220,11 +231,13 @@
                     <button class="btn btn-outline-secondary btn-sm"
                         v-if="trailingStoplosses[position.tsym] !== null || stoplosses[position.tsym] !== null"
                         :class="{ active: trailingStoplosses[position.tsym] !== null }" title="Trailing stop-loss"
+                        :disabled="targetTrailing[position.tsym]"
                         @click="$emit('set-stoploss', position, trailingStoplosses[position.tsym] !== null ? 'convert_to_sl' : 'convert_to_tsl')">
                         TSL
                     </button>
                     <button class="btn btn-outline-secondary btn-sm" v-if="targets[position.tsym] !== null"
                         :class="{ active: targetTrailing[position.tsym] }" title="Trailing target"
+                        :disabled="trailingStoplosses[position.tsym] !== null"
                         @click="$emit('toggle-target-trail', position)">
                         T-Target
                     </button>

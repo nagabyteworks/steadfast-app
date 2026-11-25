@@ -223,10 +223,10 @@ export const removeStoploss = (position) => {
   updateRule(position, { slPrice: null, slPoints: null, mode: rule.mode === 'target_trail' ? 'target_trail' : 'static' })
 }
 export const increaseStoploss = (position) => {
-  if (armedRule(position.tsym)?.slPrice != null) updateRule(position, {}, { slDelta: 0.5 })
+  if (armedRule(position.tsym)?.slPrice != null) updateRule(position, {}, { slDelta: 1 })
 }
 export const decreaseStoploss = (position) => {
-  if (armedRule(position.tsym)?.slPrice != null) updateRule(position, {}, { slDelta: -0.5 })
+  if (armedRule(position.tsym)?.slPrice != null) updateRule(position, {}, { slDelta: -1 })
 }
 
 export const setTarget = (position) => {
@@ -272,10 +272,10 @@ export const removeTarget = (position) => {
   })
 }
 export const increaseTarget = (position) => {
-  if (armedRule(position.tsym)?.targetPrice != null) updateRule(position, {}, { targetDelta: 0.5 })
+  if (armedRule(position.tsym)?.targetPrice != null) updateRule(position, {}, { targetDelta: 1 })
 }
 export const decreaseTarget = (position) => {
-  if (armedRule(position.tsym)?.targetPrice != null) updateRule(position, {}, { targetDelta: -0.5 })
+  if (armedRule(position.tsym)?.targetPrice != null) updateRule(position, {}, { targetDelta: -1 })
 }
 
 // Manual price edits; clearing the field removes that level

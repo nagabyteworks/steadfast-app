@@ -577,6 +577,14 @@ html {
   border-radius: 10px;
 }
 
+/* The mobile card lists have no inner scroller, so let the panel itself scroll */
+@media (max-width: 767.98px) {
+  .TabContent {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 .table-responsive {
   height: 500px;
   overflow: scroll;
