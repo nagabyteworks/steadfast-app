@@ -8,9 +8,6 @@ export const showLTPRangeBar = ref(false)
 export const showToast = ref(false)
 export const toastMessage = ref('')
 export const activeTab = ref('positions')
-export const killSwitchActive = ref(localStorage.getItem('KillSwitchStatus') === 'true')
-export const overtradeProtection = ref(localStorage.getItem('OvertradeProtection') === 'true')
-export const activationTime = ref(parseInt(localStorage.getItem('KillSwitchActivationTime') || '0'))
 export const currentTime = ref(Date.now())
 export const enableHotKeys = ref(localStorage.getItem('EnableHotKeys') !== 'false')
 
@@ -71,8 +68,6 @@ export const modalOptionType = ref('')
 export const selectedShoonyaPositionsSet = ref(new Set())
 export const selectedFlattradePositionsSet = ref(new Set())
 export const positionsInExecution = ref({})
-export const clockEmojis = ['🕛', '🕐', '🕑', '🕒', '🕓', '🕔', '🕕', '🕖', '🕗', '🕘', '🕙', '🕚']
-export const currentClockEmoji = ref(clockEmojis[new Date().getHours() % clockEmojis.length])
 export const socket = ref(null)
 export const lastMarketDataAt = ref(null)
 export const brokerStreamHealth = ref({
@@ -125,8 +120,6 @@ export const closePositionsRisk = ref(
 export const closePositionsTarget = ref(
   JSON.parse(localStorage.getItem('closePositionsTarget') || 'false')
 )
-export const riskAction = ref(localStorage.getItem('riskAction') || 'close')
-export const targetAction = ref(localStorage.getItem('targetAction') || 'close')
 
 export const stoplosses = useLocalStorage('stoplosses', {})
 export const targets = useLocalStorage('targets', {})

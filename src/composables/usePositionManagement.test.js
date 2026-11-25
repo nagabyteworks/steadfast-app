@@ -9,6 +9,8 @@ import {
   positionSecurityIds
 } from '@/stores/globalStore'
 
+vi.mock('@/config/profile', () => ({ usesServerManagedAccount: false, isProductionProfile: false }))
+
 vi.hoisted(() => {
   vi.stubGlobal('localStorage', jsdom.window.localStorage)
 })

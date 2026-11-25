@@ -6,7 +6,6 @@ import { getBrokerStatus } from '@/composables/useBrokerTokenValidator'
 // Global State
 import {
   BASE_URL,
-  killSwitchActive,
   selectedCallStrike,
   selectedPutStrike,
   quantities,
@@ -67,10 +66,7 @@ import {
   totalTargetPercentage,
   closePositionsRisk,
   closePositionsTarget,
-  riskAction,
-  targetAction,
   stickyMTM,
-  overtradeProtection,
   exchangeSymbols,
   expiryDates,
   selectedStrike,
@@ -94,8 +90,6 @@ import {
   targetValue
 } from '@/stores/globalStore'
 
-// Kill Switch Composables
-import { toggleKillSwitch } from '@/composables/useKillSwitch'
 
 // Order Management Composables
 import {
@@ -170,7 +164,6 @@ import {
   totalCapitalPercentage
 } from '@/composables/usePnlCalculations'
 
-export const isFormDisabled = computed(() => killSwitchActive.value)
 
 export const exchangeOptions = computed(() => {
   return Object.keys(exchangeSymbols.value).filter((key) => key !== 'symbolData')
@@ -375,21 +368,6 @@ export const updateToastVisibility = (value) => {
 export const setActiveTab = async (tab) => {
   activeTab.value = tab
   await setActiveFetchFunctionAndFetch()
-}
-
-export const checkOvertradeProtection = () => {
-  if (!overtradeProtection.value) return
-
-  const totalValue = Math.max(totalBuyValue.value, totalSellValue.value)
-  const totalAvailableBalance = availableBalance.value + usedAmount.value
-
-  if (totalValue > totalAvailableBalance) {
-    if (!killSwitchActive.value) {
-      toastMessage.value = `Overtrade protection activated. Total value: ₹${totalValue.toFixed(2)} exceeds available balance: ₹${availableBalance.value.toFixed(2)}`
-      showToast.value = true
-      toggleKillSwitch()
-    }
-  }
 }
 
 export const updateExchangeSymbols = () => {
@@ -917,16 +895,8 @@ watch(closePositionsTarget, (newValue) => {
   localStorage.setItem('closePositionsTarget', JSON.stringify(newValue))
 })
 
-watch(riskAction, (newValue) => {
-  localStorage.setItem('riskAction', newValue)
-})
-
-watch(targetAction, (newValue) => {
-  localStorage.setItem('targetAction', newValue)
-})
 watch([totalBuyValue, totalSellValue, availableBalance], async () => {
   await fetchFundLimit()
-  checkOvertradeProtection()
 })
 
 watch(stickyMTM, (newValue) => {
@@ -934,8 +904,6 @@ watch(stickyMTM, (newValue) => {
 })
 // ... (add all other watchers here)
 export const handleFormInputMouseScroll = (event, options) => {
-  if (isFormDisabled.value) return
-
   event.preventDefault()
   const direction = event.deltaY < 0 ? 1 : -1
 

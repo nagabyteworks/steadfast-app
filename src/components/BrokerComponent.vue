@@ -13,13 +13,13 @@
                 'bg-danger': brokerStatus === 'Not Connected',
                 'bg-warning text-color': brokerStatus === 'Token Expired'
             }">{{ brokerStatus }}</span>
-            <button type="button" class="btn btn-sm btn-outline-secondary me-2" :disabled="refreshing"
+            <button type="button" class="btn btn-sm btn-outline-secondary me-2 text-nowrap flex-shrink-0" :disabled="refreshing"
                 title="Refresh from Flattrade (auto every 5 seconds)" @click="emit('refresh')">
                 <span v-if="refreshing" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
                 <span v-else>&#x21bb;</span>
                 Refresh
             </button>
-            <small v-if="lastRefreshedAt" class="text-muted">{{ new Date(lastRefreshedAt).toLocaleTimeString() }}</small>
+            <small v-if="lastRefreshedAt" class="text-muted text-nowrap">{{ new Date(lastRefreshedAt).toLocaleTimeString() }}</small>
         </div>
 
         <!-- Funds -->

@@ -3,7 +3,6 @@
         'MTM': stickyMTM,
         'border border-warning': riskReached,
         'border border-success': targetReached,
-        'border border-danger': killSwitchActive
     }">
         <div class="col-6 col-md-3 col-lg-3 d-flex align-items-center justify-content-center" style="height: 40px">
             <small class="text-muted">Total Capital</small>
@@ -32,26 +31,13 @@
                 ₹{{ netPnl.toFixed(2) }}
             </span>
         </div>
-        <div class="col-6 col-md-3 col-lg-3 d-flex align-items-center justify-content-center justify-content-md-end"
-            style="height: 40px">
-            <small class="text-muted">Kill Switch</small>
-            <a :class="['ms-2', 'btn', 'btn-sm', killSwitchButtonClass]" @click="handleKillSwitchClick"
-                :data-bs-target="killSwitchActive ? '' : '#KillSwitchActivationConfirmationModal'"
-                :data-bs-toggle="killSwitchActive ? '' : 'modal'"
-                :title="killSwitchActive ? killSwitchRemainingTime : ''">
-                <span v-if="killSwitchActive">{{ currentClockEmoji }}</span>
-                <span>{{ killSwitchButtonText }}</span>
-            </a>
-        </div>
     </section>
 </template>
 
 <script setup>
 import { defineProps } from 'vue';
-import { killSwitchButtonText, killSwitchButtonClass, handleKillSwitchClick } from '@/composables/useKillSwitch';
 
 // Global State
-import { currentClockEmoji, killSwitchActive } from '@/stores/globalStore';
 
 const props = defineProps({
     stickyMTM: Boolean,
@@ -59,11 +45,8 @@ const props = defineProps({
     totalProfit: Number,
     totalNetQty: Number,
     netPnl: Number,
-    currentClockEmoji: String,
     riskReached: Boolean,
-    targetReached: Boolean,
-    killSwitchRemainingTime: String,
-    killSwitchActive: Boolean
+    targetReached: Boolean
 });
 
 </script>

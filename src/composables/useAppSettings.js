@@ -7,7 +7,6 @@ import {
   callStrikeOffset,
   putStrikeOffset,
   expiryOffset,
-  overtradeProtection,
   notificationSound,
   totalRiskTargetToggle,
   totalRiskTargetType,
@@ -17,8 +16,6 @@ import {
   totalTargetPercentage,
   closePositionsRisk,
   closePositionsTarget,
-  riskAction,
-  targetAction,
   toastMessage,
   showToast,
   selectedExpiry,
@@ -78,11 +75,6 @@ watch(expiryOffset, (newValue) => {
   saveExpiryOffset()
   setDefaultExpiry()
 })
-export const toggleOvertradeProtection = () => {
-  overtradeProtection.value = !overtradeProtection.value
-  localStorage.setItem('OvertradeProtection', overtradeProtection.value.toString())
-}
-
 // Notification Settings
 export const toggleNotificationSound = () => {
   localStorage.setItem('notificationSound', notificationSound.value.toString())
@@ -147,22 +139,14 @@ export const targetReached = computed(() => {
 watch(riskReached, async (newValue) => {
   if (newValue && closePositionsRisk.value) {
     console.log('Risk threshold reached. Taking action.')
-    if (riskAction.value === 'close') {
-      await closeAllPositions()
-      showToastNotification('All positions closed due to risk threshold')
-    } else if (riskAction.value === 'killSwitch') {
-      await toggleKillSwitch()
-    }
+    await closeAllPositions()
+    showToastNotification('All positions closed due to risk threshold')
   }
 })
 watch(targetReached, async (newValue) => {
   if (newValue && closePositionsTarget.value) {
     console.log('Target reached. Taking action.')
-    if (targetAction.value === 'close') {
-      await closeAllPositions()
-      showToastNotification('All positions closed due to target reached')
-    } else if (targetAction.value === 'killSwitch') {
-      await toggleKillSwitch()
-    }
+    await closeAllPositions()
+    showToastNotification('All positions closed due to target reached')
   }
 })

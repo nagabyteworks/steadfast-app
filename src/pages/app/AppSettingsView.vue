@@ -65,23 +65,6 @@
       <div class="col-12 border rounded p-3 bg-color-2">
         <h6 class="mb-0">Risk Management Settings</h6>
         <div class="row">
-          <!-- Overtrade Protection (Auto-Kill Switch) -->
-          <div class="col-12 col-md-6 col-lg-4 mt-3">
-            <label for="overtradeProtection" class="form-label">
-              Overtrade Protection (Auto-Kill Switch)
-            </label>
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="overtradeProtection" :checked="overtradeProtection"
-                @change="toggleOvertradeProtection" />
-              <label class="form-check-label" for="overtradeProtection">
-                {{ overtradeProtection ? 'Enabled' : 'Disabled' }}
-              </label>
-            </div>
-            <small class="text-muted">
-              Activates Kill Switch if your total Buy or Sell value exceeds your available
-              funds, preventing overtrading.
-            </small>
-          </div>
           <!-- Max Risk & Target Toggle -->
           <div class="col-12 col-md-6 col-lg-4 mt-3">
             <label for="" class="form-label mt-2">Max Risk & Target Warning</label>
@@ -120,23 +103,12 @@
               </template>
             </div>
             <!-- Close Positions if Risk is reached -->
-            <label for="closePositionsRisk" class="form-label mt-2">Action if Max Risk is reached</label>
+            <label for="closePositionsRisk" class="form-label mt-2">Close all positions if Max Risk is reached</label>
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="closePositionsRisk" v-model="closePositionsRisk" />
               <label class="form-check-label" for="closePositionsRisk">
                 {{ closePositionsRisk ? 'Enabled' : 'Disabled' }}
               </label>
-            </div>
-            <div v-if="closePositionsRisk" class="mt-2">
-              <div class="form-check">
-                <input class="form-check-input" type="radio" id="riskActionClose" value="close" v-model="riskAction" />
-                <label class="form-check-label" for="riskActionClose">Close Positions</label>
-              </div>
-              <div class="form-check">
-                <input class="form-check-input" type="radio" id="riskActionKillSwitch" value="killSwitch"
-                  v-model="riskAction" />
-                <label class="form-check-label" for="riskActionKillSwitch">Activate Kill Switch</label>
-              </div>
             </div>
           </div>
           <!-- Target Input -->
@@ -156,25 +128,13 @@
               </template>
             </div>
             <!-- Close Positions if Target is reached -->
-            <label for="closePositionsTarget" class="form-label mt-2">Action if Max Target is reached</label>
+            <label for="closePositionsTarget" class="form-label mt-2">Close all positions if Max Target is reached</label>
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="closePositionsTarget"
                 v-model="closePositionsTarget" />
               <label class="form-check-label" for="closePositionsTarget">
                 {{ closePositionsTarget ? 'Enabled' : 'Disabled' }}
               </label>
-            </div>
-            <div v-if="closePositionsTarget" class="mt-2">
-              <div class="form-check">
-                <input class="form-check-input" type="radio" id="targetActionClose" value="close"
-                  v-model="targetAction" />
-                <label class="form-check-label" for="targetActionClose">Close Positions</label>
-              </div>
-              <div class="form-check">
-                <input class="form-check-input" type="radio" id="targetActionKillSwitch" value="killSwitch"
-                  v-model="targetAction" />
-                <label class="form-check-label" for="targetActionKillSwitch">Activate Kill Switch</label>
-              </div>
             </div>
           </div>
         </div>
@@ -252,7 +212,7 @@
 
 <script setup>
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue'
-import { toggleLTPRangeBar, toggleOHLCValues, toggleStrikeDetails, toggleStickyMTM, toggleNotificationSound, toggleOvertradeProtection, saveOffsets, saveExpiryOffset } from '@/composables/useAppSettings'
+import { toggleLTPRangeBar, toggleOHLCValues, toggleStrikeDetails, toggleStickyMTM, toggleNotificationSound, saveOffsets, saveExpiryOffset } from '@/composables/useAppSettings'
 
 // Import global state
 import {
@@ -266,7 +226,6 @@ import {
   callStrikeOffset,
   putStrikeOffset,
   expiryOffset,
-  overtradeProtection,
 
   // Notification Settings
   notificationSound,
@@ -280,7 +239,5 @@ import {
   totalTargetPercentage,
   closePositionsRisk,
   closePositionsTarget,
-  riskAction,
-  targetAction
 } from '@/stores/globalStore'
 </script>

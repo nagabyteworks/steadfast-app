@@ -53,16 +53,16 @@
                                 </div>
                                 <div class="col-12" v-else-if="stoplosses[position.tsym] !== null">
                                     <div class="btn-group" role="group">
-                                        <button class="btn btn-sm btn-outline-danger"
+                                        <button class="btn btn-outline-danger btn-xs"
                                             @click="$emit('decrease-stoploss', position)">
-                                            - SL
+                                            -
                                         </button>
-                                        <span class="d-flex align-items-center bg-danger text-white px-2">
+                                        <span class="d-flex align-items-center bg-danger text-white px-1 small">
                                             {{ stoplosses[position.tsym] }}
                                         </span>
-                                        <button class="btn btn-sm btn-outline-success"
+                                        <button class="btn btn-outline-success btn-xs"
                                             @click="$emit('increase-stoploss', position)">
-                                            + SL
+                                            +
                                         </button>
                                     </div>
                                 </div>
@@ -96,16 +96,16 @@
                             <div class="row" style="height: 30px;">
                                 <div class="col-12" v-if="targets[position.tsym] !== null">
                                     <div class="btn-group" role="group">
-                                        <button class="btn btn-sm btn-outline-danger"
+                                        <button class="btn btn-outline-danger btn-xs"
                                             @click="$emit('decrease-target', position)">
-                                            - TG
+                                            -
                                         </button>
-                                        <span class="d-flex align-items-center bg-success text-white px-2">
+                                        <span class="d-flex align-items-center bg-success text-white px-1 small">
                                             {{ targets[position.tsym] }}
                                         </span>
-                                        <button class="btn btn-sm btn-outline-success"
+                                        <button class="btn btn-outline-success btn-xs"
                                             @click="$emit('increase-target', position)">
-                                            + TG
+                                            +
                                         </button>
                                     </div>
                                 </div>
@@ -312,3 +312,11 @@ function handleCheckboxChange(event, tsym) {
     return updatedSet;
 }
 </script>
+
+<style scoped>
+.btn-xs {
+    padding: 0 0.35rem;
+    font-size: 0.7rem;
+    line-height: 1.3;
+}
+</style>

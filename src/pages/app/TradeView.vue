@@ -28,13 +28,13 @@
         Broker stream {{ brokerStreamHealth.connectionState }}; browser connection {{ wsConnectionState }};
         market data is {{ marketDataStale ? 'stale or unavailable' : 'current' }}.
       </div>
-      <fieldset :disabled="isFormDisabled" :class="{ 'disabled-form': isFormDisabled }">
+      <fieldset>
         <div class="row">
           <!-- Exchange Selection -->
           <div class="col-6 col-md-4 col-lg-2">
             <label for="Exchange" class="form-label mb-0 small">Exchange</label>
             <select id="Exchange" class="form-select form-select-sm" aria-label="Exchange" v-model="selectedExchange"
-              @change="fetchTradingData" :class="{ 'disabled-form': isFormDisabled }">
+              @change="fetchTradingData">
               <option v-for="exchange in exchangeOptions" :key="exchange" :value="exchange">
                 {{ exchange }}
               </option>
@@ -45,7 +45,7 @@
           <div class="col-6 col-md-4 col-lg-2">
             <label for="Segment" class="form-label mb-0 small">Segment</label>
             <select id="Segment" class="form-select form-select-sm" aria-label="Segment"
-              :class="{ 'disabled-form': isFormDisabled }" disabled>
+              disabled>
               <option value="Options" selected>Options</option>
               <option value="Futures">Futures</option>
             </select>
@@ -55,7 +55,7 @@
           <div class="col-6 col-md-4 col-lg-2">
             <label for="MasterSymbol" class="form-label mb-0 small">Master Symbol</label>
             <select id="MasterSymbol" class="form-select form-select-sm" aria-label="Master Symbol"
-              v-model="selectedMasterSymbol" :class="{ 'disabled-form': isFormDisabled }">
+              v-model="selectedMasterSymbol">
               <option v-for="symbol in exchangeSymbols[selectedExchange]" :key="symbol" :value="symbol">
                 {{ symbol }}
               </option>
@@ -66,7 +66,7 @@
           <div class="col-6 col-md-4 col-lg-2">
             <label for="Expiry" class="form-label mb-0 small">Expiry Date</label>
             <select id="Expiry" class="form-select form-select-sm" aria-label="Expiry" v-model="selectedExpiry"
-              :class="{ 'disabled-form': isFormDisabled }">
+             >
               <option v-for="date in expiryDates" :key="date" :value="date">
                 {{ formatDate(date) }}
               </option>
@@ -77,7 +77,7 @@
           <div class="col-6 col-md-4 col-lg-2">
             <label for="ProductType" class="form-label mb-0 small">Product Type</label>
             <select id="ProductType" class="form-select form-select-sm" v-model="selectedProductType"
-              aria-label="ProductType" :class="{ 'disabled-form': isFormDisabled }">
+              aria-label="ProductType">
               <option v-for="productType in productTypes" :key="productType" :value="getProductTypeValue(productType)">
                 {{ productType }}
               </option>
@@ -93,7 +93,7 @@
               <input type="number" id="Quantity" class="form-control form-control-sm" v-model.number="selectedLots"
                 :min="1" :max="maxLots" @input="updateSelectedQuantity"
                 @wheel.prevent="(e) => handleFormInputMouseScroll(e, { type: 'quantity' })"
-                :class="{ 'disabled-form': isFormDisabled }" />
+                />
               <span class="input-group-text">{{ selectedQuantity }}</span>
             </div>
           </div>
@@ -103,7 +103,7 @@
             <label for="OrderType" class="form-label mb-0 small">Order Type</label>
             <div class="input-group input-group-sm">
               <select id="OrderType" class="form-select form-select-sm w-75" aria-label="OrderType"
-                v-model="selectedOrderType" :class="{ 'disabled-form': isFormDisabled }"
+                v-model="selectedOrderType"
                 @change="handleOrderTypeChange">
                 <option v-for="(displayType, index) in displayOrderTypes" :key="orderTypes[index]"
                   :value="orderTypes[index]">
@@ -117,7 +117,7 @@
           <div class="col-6 col-md-4 col-lg-2 mt-md-1 mt-lg-2">
             <label for="MarketProtection" class="form-label mb-0 small">Market Protection</label>
             <select id="Segment" class="form-select form-select-sm" aria-label="Segment"
-              :class="{ 'disabled-form': isFormDisabled }" disabled>
+              disabled>
               <option value="0" selected>0%</option>
               <option value="1">1%</option>
               <option value="2">2%</option>
@@ -128,56 +128,55 @@
           </div>
 
           <!-- Predefined Stoploss -->
-          <div class="col-6 col-md-4 col-lg-3 mt-md-1 mt-lg-2">
+          <div class="col-6 col-md-4 col-lg-2 mt-md-1 mt-lg-2">
             <label for="enableStoploss" class="form-label mb-0 small">Predefined Stoploss</label>
             <div class="input-group input-group-sm mb-3">
               <div class="input-group-text">
                 <input class="form-check-input mt-0" type="checkbox" id="enableStoploss"
                   aria-label="Enable Predefined Stoploss" v-model="enableStoploss"
-                  :class="{ 'disabled-form': isFormDisabled, 'border-danger bg-danger': enableStoploss }" />
+                  :class="{ 'border-danger bg-danger': enableStoploss }" />
               </div>
-              <input type="number" class="form-control form-control-sm" id="stoplossValue"
+              <input type="number" class="form-control form-control-sm" style="min-width: 0; max-width: 70px;" id="stoplossValue"
                 aria-label="Predefined Stoploss (points)" v-model="stoplossValue"
                 @wheel.prevent="(e) => handleFormInputMouseScroll(e, { type: 'stoploss' })"
-                :class="{ 'disabled-form': isFormDisabled }" />
+                />
               <span class="input-group-text">Points</span>
             </div>
             <div class="form-check form-switch mb-2">
-              <input class="form-check-input" type="checkbox" id="enableTrailingStoploss" v-model="enableTrailingStoploss"
-                :disabled="isFormDisabled" />
+              <input class="form-check-input" type="checkbox" id="enableTrailingStoploss" v-model="enableTrailingStoploss" />
               <label class="form-check-label small" for="enableTrailingStoploss">Trailing stoploss</label>
             </div>
           </div>
 
           <!-- Predefined Target -->
-          <div class="col-6 col-md-4 col-lg-3 mt-md-1 mt-lg-2">
+          <div class="col-6 col-md-4 col-lg-2 mt-md-1 mt-lg-2">
             <label for="enableTarget" class="form-label mb-0 small">Predefined Target</label>
             <div class="input-group input-group-sm mb-3">
               <div class="input-group-text">
                 <input class="form-check-input mt-0" type="checkbox" id="enableTarget"
                   aria-label="Enable Predefined Target" v-model="enableTarget"
-                  :class="{ 'disabled-form': isFormDisabled, 'border-success bg-success': enableTarget }" />
+                  :class="{ 'border-success bg-success': enableTarget }" />
               </div>
-              <input type="number" class="form-control form-control-sm" id="targetValue"
+              <input type="number" class="form-control form-control-sm" style="min-width: 0; max-width: 70px;" id="targetValue"
                 aria-label="Predefined Target (points)" v-model="targetValue"
                 @wheel.prevent="(e) => handleFormInputMouseScroll(e, { type: 'target' })"
-                :class="{ 'disabled-form': isFormDisabled }" />
+                />
               <span class="input-group-text">Points</span>
             </div>
           </div>
 
           <!-- Target Trailing: each time the target is reached the stoploss moves to it and the target advances -->
-          <div class="col-6 col-md-4 col-lg-3 mt-md-1 mt-lg-2">
+          <div class="col-6 col-md-4 col-lg-2 mt-md-1 mt-lg-2">
             <label for="enableTargetTrail" class="form-label mb-0 small">Target Trailing</label>
             <div class="input-group input-group-sm mb-3">
               <div class="input-group-text">
                 <input class="form-check-input mt-0" type="checkbox" id="enableTargetTrail"
                   aria-label="Enable Target Trailing" v-model="enableTargetTrail"
-                  :class="{ 'disabled-form': isFormDisabled, 'border-success bg-success': enableTargetTrail }" />
+                  :class="{ 'border-success bg-success': enableTargetTrail }" />
               </div>
-              <input type="number" min="0" class="form-control form-control-sm" id="targetTrailValue"
+              <input type="number" min="0" class="form-control form-control-sm" style="min-width: 0; max-width: 70px;" id="targetTrailValue"
                 aria-label="Target trail (points)" v-model="targetTrailValue"
-                :class="{ 'disabled-form': isFormDisabled }" />
+                />
               <span class="input-group-text">Points</span>
             </div>
           </div>
@@ -187,7 +186,7 @@
             <label for="enableHotKeys" class="form-label mb-0 small">1 Click Keys</label>
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="enableHotKeys" v-model="enableHotKeys"
-                :class="{ 'disabled-form': isFormDisabled }" />
+                />
               <label class="form-check-label" for="enableHotKeys">
                 {{ enableHotKeys ? 'Enabled' : 'Disabled' }}
               </label>
@@ -206,7 +205,7 @@
                   {{ formatTradingSymbol(selectedCallStrike.tradingSymbol, true) }}
                 </span>
                 <select id="CallStrike" class="form-select form-select-sm d-inline-block w-auto ms-2"
-                  aria-label="Call Strike" v-model="selectedCallStrike" :class="{ 'disabled-form': isFormDisabled }"
+                  aria-label="Call Strike" v-model="selectedCallStrike"
                   @change="updateTradingSymbol(selectedCallStrike)"
                   @wheel.prevent="(e) => handleFormInputMouseScroll(e, { type: 'strike', strikeType: 'CALL' })">
                   <option v-for="strike in callStrikes" :key="strike.securityId" :value="strike">
@@ -307,7 +306,7 @@
             <div class="row mt-2">
               <div class="col-12 d-flex align-items-center justify-content-between">
                 <select id="PutStrike" class="form-select form-select-sm d-inline-block w-auto me-2"
-                  aria-label="Put Strike" v-model="selectedPutStrike" :class="{ 'disabled-form': isFormDisabled }"
+                  aria-label="Put Strike" v-model="selectedPutStrike"
                   @change="updateTradingSymbol(selectedPutStrike)"
                   @wheel.prevent="(e) => handleFormInputMouseScroll(e, { type: 'strike', strikeType: 'PUT' })">
                   <option v-for="strike in putStrikes" :key="strike.securityId" :value="strike">
@@ -472,8 +471,7 @@
 
   <!-- Total Profit & Net PNL -->
   <PnlComponent :stickyMTM="stickyMTM" :totalCapitalPercentage="totalCapitalPercentage" :totalProfit="totalProfit"
-    :totalNetQty="totalNetQty" :netPnl="netPnl" :riskReached="riskReached" :targetReached="targetReached"
-    :killSwitchActive="killSwitchActive" :killSwitchRemainingTime="killSwitchRemainingTime" />
+    :totalNetQty="totalNetQty" :netPnl="netPnl" :riskReached="riskReached" :targetReached="targetReached" />
 
   <!-- Positions & Trades -->
   <section class="row pb-3">
@@ -639,38 +637,6 @@
     </div>
   </div>
 
-  <!-- Kill Swtich Activation Confirmation Modal -->
-  <div class="modal fade" id="KillSwitchActivationConfirmationModal" tabindex="-1"
-    aria-labelledby="KillSwitchActivationConfirmationModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="KillSwitchActivationConfirmationModalLabel">
-            Confirm Kill Switch Activation
-          </h5>
-        </div>
-        <div class="modal-body">
-          <blockquote class="blockquote">
-            This action will <b class="text-danger">close all positions</b> and block trading for the
-            next 6 hours.
-          </blockquote>
-          <p>Are you sure you want to continue?</p>
-        </div>
-        <div class="modal-footer">
-          <div class="d-flex flex-row justify-content-between w-100">
-            <button type="button" class="btn btn-sm fs-6 btn-outline-secondary w-50 me-1" data-bs-dismiss="modal">
-              No
-            </button>
-            <button type="button" class="btn btn-sm fs-6 btn-danger w-50 ms-1" data-bs-dismiss="modal"
-              @click="toggleKillSwitch">
-              Yes
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
 </template>
 
 <script setup>
@@ -688,7 +654,7 @@ import PnlComponent from '@/components/PnlComponent.vue';
 
 // Global State
 import {
-  killSwitchActive, selectedCallStrike, selectedPutStrike, selectedMasterSymbol, shoonyaPositionBook, flatTradePositionBook, selectedBroker, selectedBrokerName, selectedExchange, selectedProductType,
+  selectedCallStrike, selectedPutStrike, selectedMasterSymbol, shoonyaPositionBook, flatTradePositionBook, selectedBroker, selectedBrokerName, selectedExchange, selectedProductType,
   selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, enableTrailingStoploss, enableTargetTrail, targetTrailValue, riskDryRun, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
   currentTime,
   showLTPRangeBar,
@@ -724,8 +690,6 @@ import {
   flattradePositionsLastUpdatedAt, lastMarketDataAt, brokerStreamHealth,
 } from '@/stores/globalStore'
 
-// Kill Switch Composables
-import { killSwitchRemainingTime, toggleKillSwitch, initKillSwitch, killSwitchButtonText, killSwitchButtonClass, handleKillSwitchClick } from '@/composables/useKillSwitch'
 
 // Broker Selection Composables
 import { availableBrokers, brokerStatus } from '@/composables/useBrokerFunctions'
@@ -771,7 +735,6 @@ import {
   resetOrderTypeIfNeeded,
 
   // Computed properties
-  isFormDisabled,
   exchangeOptions,
   todayExpirySymbol,
   maxLots,
@@ -865,7 +828,6 @@ const refreshAccount = async () => {
 onMounted(async () => {
 
   await checkAllTokens();
-  initKillSwitch();
 
   const storedBroker = localStorage.getItem('selectedBroker');
   if (storedBroker) {

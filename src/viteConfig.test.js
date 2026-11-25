@@ -2,6 +2,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import viteConfig from '../vite.config'
 
+// Ignore the developer's repository-root .env so the tests are hermetic
+vi.mock('vite', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    loadEnv: (mode, dir, prefixes) => (prefixes === '' ? {} : actual.loadEnv(mode, dir, prefixes))
+  }
+})
+
 const production = { command: 'build', mode: 'production' }
 
 afterEach(() => vi.unstubAllEnvs())
