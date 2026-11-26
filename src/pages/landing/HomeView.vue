@@ -46,7 +46,7 @@
                     Each contribution moves us forward in crafting a better trading experience for
                     our community.
                 </blockquote>
-                <a href="https://github.com/sponsors/narenkram" target="_blank"
+                <a href="https://github.com/sponsors/nagabyteworks" target="_blank"
                     class="btn btn-outline-danger btn-md me-2 mt-2 ">
                     Donate via GitHub
                 </a>
