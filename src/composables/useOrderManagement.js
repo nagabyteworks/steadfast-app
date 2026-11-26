@@ -226,7 +226,7 @@ export const placeOrder = async (transactionType, drvOptionType) => {
           : ''
         throw new Error(brokerMessage
           ? `Broker rejected the order: ${brokerMessage}`
-          : 'Broker did not acknowledge the order. Verify orders with your broker before retrying.')
+          : 'Order status is uncertain; automatic reconciliation is in progress. Do not retry yet.')
       }
       requestInFlight = false
       console.log(`Placed order for ${lotsToPlace} lots (${quantityToPlace} quantity)`)
@@ -242,7 +242,7 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     console.log(
       `All orders submitted. Total: ${acknowledgedLots} lots (${fullOrderQuantity} quantity)`
     )
-    toastMessage.value = `Order(s) submitted for ${acknowledgedLots} lots. Verify fills with your broker.`
+    toastMessage.value = `Order(s) submitted for ${acknowledgedLots} lots. Broker status synchronizes automatically.`
     showToast.value = true
 
     // Add a delay before fetching updated data
@@ -255,7 +255,7 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     const newPosition = findNewPosition(selectedStrike.tradingSymbol)
     if (selectedBroker.value?.brokerName === 'Flattrade' &&
         (previousPositionStale || flattradePositionsStale.value)) {
-      toastMessage.value = 'Order submitted, but position data is stale. Verify the position and its stop-loss/target with Flattrade.'
+      toastMessage.value = 'Order submitted; position data is stale, and status is recovering automatically.'
       showToast.value = true
       await updateFundLimits()
       return
@@ -273,11 +273,11 @@ export const placeOrder = async (transactionType, drvOptionType) => {
   } catch (error) {
     logRequestError('Error placing order', error)
     if (acknowledgedLots > 0) {
-      toastMessage.value = 'An order was submitted, but a later step failed. Verify orders and positions with your broker before retrying.'
+      toastMessage.value = 'An order was submitted; automatic order and position reconciliation is in progress. Do not retry yet.'
     } else if (typeof error.response?.data?.message === 'string') {
       toastMessage.value = error.response.data.message
     } else if (requestInFlight) {
-      toastMessage.value = 'Order status is uncertain. Verify orders with your broker before retrying.'
+      toastMessage.value = 'Order status is uncertain; automatic reconciliation is in progress. Do not retry yet.'
     } else {
       toastMessage.value = error.message || 'Failed to place order.'
     }
@@ -360,7 +360,7 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
     }
 
     console.log(`All orders placed successfully. Total: ${placedQuantity} quantity`)
-    toastMessage.value = `Close order(s) submitted for ${getSymbol(position)}. Verify fills with your broker.`
+    toastMessage.value = `${getSymbol(position)}: EXITING`
     showToast.value = true
 
     // Add a delay before fetching updated data
@@ -431,7 +431,7 @@ export const closeAllPositions = async () => {
     await updateFundLimits()
 
     if (positionsClosed) {
-      toastMessage.value = 'Close orders submitted. Verify fills with your broker.'
+      toastMessage.value = 'Close orders submitted. Broker status synchronizes automatically.'
     } else {
       toastMessage.value = `No positions to close for ${selectedBroker.value?.brokerName}`
     }
@@ -525,7 +525,7 @@ export const cancelPendingOrders = async () => {
 
   try {
     await Promise.all(cancelPromises)
-    toastMessage.value = 'Cancellation requests submitted. Verify order status with your broker.'
+    toastMessage.value = 'Cancellation requests submitted. Broker status synchronizes automatically.'
     showToast.value = true
 
     // Refresh the orders list based on the selected broker
@@ -594,7 +594,7 @@ export const closeSelectedPositions = async () => {
     await updateFundLimits()
 
     if (positionsClosed) {
-      toastMessage.value = 'Close orders submitted. Verify fills with your broker.'
+      toastMessage.value = 'Close orders submitted. Broker status synchronizes automatically.'
     } else {
       toastMessage.value = `No positions to close`
     }

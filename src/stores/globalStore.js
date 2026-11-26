@@ -143,6 +143,7 @@ export const useUiTriggers = useLocalStorage('useUiTriggers', false)
 export const riskRules = ref({})
 export const reconciliationRequired = ref({})
 export const riskSyncAvailable = ref(false)
+export const reconciliationStatus = ref(null)
 
 // Trailing stop-loss and target trailing are alternatives. Target trailing needs both the
 // predefined stop-loss and target, so enabling it switches them on and disabling either

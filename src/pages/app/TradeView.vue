@@ -13,7 +13,7 @@
         <button type="button" class="btn-close" aria-label="Close" @click="staleDismissed = true"></button>
         Position data is stale or unavailable. Last successful refresh:
         {{ flattradePositionsLastUpdatedAt ? new Date(flattradePositionsLastUpdatedAt).toLocaleTimeString() : 'never' }}.
-        Verify current positions directly with your broker.
+        Automatic synchronization will resume when broker data is available.
       </div>
       <fieldset>
         <div class="row">
@@ -375,6 +375,16 @@
           <!-- Close & Cancel Buttons -->
           <div class="order-3 order-md-2 order-lg-2 col-12 col-md-4 col-lg-4 text-center">
             <div class="d-flex justify-content-center gap-2 mt-2">
+              <button type="button" class="btn btn-sm btn-success text-nowrap" :disabled="bothOrdersBusy"
+                @click="handleBothOrderClick('BUY')">
+                Buy Both
+              </button>
+              <button type="button" class="btn btn-sm btn-danger text-nowrap" :disabled="bothOrdersBusy"
+                @click="handleBothOrderClick('SELL')">
+                Sell Both
+              </button>
+            </div>
+            <div class="d-flex justify-content-center gap-2 mt-2">
               <button v-if="selectedShoonyaPositionsSet.size === 0 && selectedFlattradePositionsSet.size === 0"
                 class="btn btn-sm btn-outline text-nowrap" @click="closeAllPositions">
                 <kbd v-if="enableHotKeys">F6</kbd>
@@ -515,7 +525,7 @@
                 Stop-loss and target rules are virtual, not protective orders at the exchange.
                 {{ useUiTriggers ? 'UI monitoring requires this tab to remain open and receive fresh prices.' : 'Server monitoring continues when this page is closed.' }}
                 Monitoring or exits can fail if the monitor, market-data feed, network or broker is unavailable.
-                An exit order may not fill; verify the position with Flattrade.
+                Broker order status is synchronized automatically; ACTION REQUIRED appears if recovery cannot safely confirm the state.
               </p>
             </div>
 
@@ -539,7 +549,7 @@
 
   <!-- Limit Price Input Modal (conditionally rendered) -->
   <div class="modal fade" id="PlaceLimitOrderWindow" tabindex="-1" aria-labelledby="PlaceLimitOrderWindowLabel"
-    aria-hidden="true">
+    aria-hidden="true" @hidden.bs.modal="advanceBothOrderSequence">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
@@ -565,7 +575,7 @@
               Cancel
             </button>
             <button type="button" class="btn btn-sm fs-6 btn-primary" :disabled="!isValidLimitPrice"
-              data-bs-dismiss="modal" @click="validateAndPlaceOrder">
+              data-bs-dismiss="modal" @click="submitLimitOrder">
               Place Order
             </button>
           </div>
@@ -616,13 +626,14 @@
 </template>
 
 <script setup>
+import { Modal } from 'bootstrap';
 import { usesServerManagedAccount } from '@/config/profile';
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import AppNavigationComponent from '@/components/AppNavigationComponent.vue';
 import BrokerComponent from '@/components/BrokerComponent.vue';
 import { checkAllTokens } from '@/composables/useBrokerTokenValidator';
 import { updateSelectedBrokerOnServer } from '@/api/broker';
-import { fetchFlattradePositions, fetchFundLimit, updateOrdersAndPositions } from '@/composables/usePositionManagement';
+import { fetchFundLimit, updateOrdersAndPositions } from '@/composables/usePositionManagement';
 import PositionsTableComponent from '@/components/PositionsTableComponent.vue';
 import OrdersNTradesComponent from '@/components/OrdersNTradesComponent.vue';
 import LtpRangeBarComponent from '@/components/LtpRangeBarComponent.vue';
@@ -667,6 +678,7 @@ import {
   wsConnectionState, productionAccountError, flattradePositionsStale,
   flattradePositionsLastUpdatedAt, lastMarketDataAt, brokerStreamHealth,
   masterPercentChange, brokerMessage, systemNotices, riskRules, reconciliationRequired, riskSyncAvailable,
+  reconciliationStatus,
 } from '@/stores/globalStore'
 
 
@@ -678,9 +690,10 @@ import { productTypes, getProductTypeValue, updateAvailableQuantities, orderType
 
 // Order Management Composables
 import { closeAllPositions, cancelPendingOrders, closeSelectedPositions, closePosition } from '@/composables/useOrderManagement'
+import { createPairOrderFlow } from '@/composables/usePairOrderFlow'
 
 // Risk Management Composables
-import { checkStoplossesAndTargets, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget, setStoplossPrice, setTargetPrice, toggleTargetTrail, syncRiskRules } from '@/composables/useRiskManagement'
+import { checkStoplossesAndTargets, getPositionRiskStatus, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget, setStoplossPrice, setTargetPrice, toggleTargetTrail, syncRiskRules } from '@/composables/useRiskManagement'
 import { checkUiRiskTriggers } from '@/composables/useUiRiskTriggers'
 
 // Keyboard Shortcuts Composables
@@ -729,7 +742,8 @@ import {
   openMarkerPosition,
   putLtpRangeWidth,
   putOpenMarkerPosition,
-  handleFormInputMouseScroll
+  handleFormInputMouseScroll,
+  showToastNotification
 } from '@/composables/useTradeView'
 
 // PnL Calculations Composables
@@ -743,12 +757,13 @@ import {
 
 const isServerManaged = usesServerManagedAccount;
 const staleDismissed = ref(false);
+const bothOrdersBusy = ref(false);
 const lotsText = '1 to 10 contract lots';
 const serverManagedNotice = computed(() =>
   `Server-managed orders place live NSE/BSE index derivatives trades (${lotsText} each). `
   + `Virtual stop-loss and target rules are monitored by the ${useUiTriggers.value ? 'browser UI' : 'server'}, not the exchange. `
   + 'If protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured. '
-  + 'Triggered exits place live limit orders. Verify fills with Flattrade.')
+  + 'Triggered exits place live limit orders. Broker order status is synchronized automatically.')
 const streamNotice = computed(() =>
   selectedBroker.value?.brokerName === 'Flattrade'
   && (!brokerStreamHealth.value.authenticated || wsConnectionState.value !== 'connected' || marketDataStale.value)
@@ -764,29 +779,77 @@ const positionsStale = computed(
     !flattradePositionsLastUpdatedAt.value ||
     currentTime.value - flattradePositionsLastUpdatedAt.value > 120_000
 )
+const showBothOrderLimitModal = () => {
+  const modalElement = document.getElementById('PlaceLimitOrderWindow')
+  if (!modalElement) throw new Error('The limit-order dialog is unavailable')
+  Modal.getOrCreateInstance(modalElement).show()
+}
+const pairOrderFlow = createPairOrderFlow({
+  legs: ['CALL', 'PUT'],
+  prepareLeg: (transactionType, optionType) => {
+    modalTransactionType.value = transactionType
+    modalOptionType.value = optionType
+    selectedStrike.value = optionType === 'CALL' ? selectedCallStrike.value : selectedPutStrike.value
+    handleOrderTypeChange()
+  },
+  openDialog: showBothOrderLimitModal,
+  setBusy: (busy) => { bothOrdersBusy.value = busy },
+  onCanceled: (completedLegs) => {
+    if (completedLegs > 0) showToastNotification('The remaining pair order was canceled.')
+  }
+})
+const handleBothOrderClick = async (transactionType) => {
+  const strikes = [selectedCallStrike.value, selectedPutStrike.value]
+  if (strikes.some((strike) => !strike?.tradingSymbol || !strike?.securityId)) {
+    showToastNotification('Select both CE and PE strikes before placing both orders.')
+    return
+  }
+  if (bothOrdersBusy.value) return
+  bothOrdersBusy.value = true
+  if (selectedOrderType.value === 'LMT') {
+    pairOrderFlow.start(transactionType)
+    return
+  }
+  try {
+    await handleOrderClick(transactionType, 'CALL')
+    await handleOrderClick(transactionType, 'PUT')
+  } finally {
+    bothOrdersBusy.value = false
+  }
+}
+const submitLimitOrder = async () => {
+  await pairOrderFlow.submit(validateAndPlaceOrder)
+}
+const advanceBothOrderSequence = async () => {
+  await pairOrderFlow.dialogHidden()
+}
 const riskNotices = computed(() => {
   const openSymbols = new Set(
     [...flatTradePositionBook.value, ...shoonyaPositionBook.value]
       .filter((position) => Number(position.netqty ?? position.netQty) !== 0)
       .map((position) => position.tsym)
   )
-  const reconciliation = Object.entries(reconciliationRequired.value)
-    .filter(([tsym]) => openSymbols.has(tsym))
-    .map(([tsym, status]) => `${tsym}: ${status.message || 'protection requires reconciliation'}`)
-  const outcomes = Object.entries(riskRules.value)
-    .filter(([tsym, rule]) => openSymbols.has(tsym) && rule.status !== 'armed' && rule.message)
-    .filter(([tsym]) => !reconciliationRequired.value[tsym])
-    .map(([tsym, rule]) => `${tsym}: ${rule.message}`)
-  const unavailable = isServerManaged && openSymbols.size && !riskSyncAvailable.value
-    ? ['Risk rules could not be loaded; verify each open position with Flattrade.']
-    : []
-  const unprotected = isServerManaged && riskSyncAvailable.value
-    ? [...openSymbols]
-      .filter((tsym) => !reconciliationRequired.value[tsym] && riskRules.value[tsym]?.status !== 'armed')
-      .filter((tsym) => !riskRules.value[tsym]?.message)
-      .map((tsym) => `${tsym}: no active stop-loss/target rule.`)
-    : []
-  return [...reconciliation, ...outcomes, ...unavailable, ...unprotected]
+  if (!isServerManaged) return []
+  const scheduler = reconciliationStatus.value
+  const statusFresh = scheduler?.currentStatus === 'success' &&
+    Date.now() - Number(scheduler.lastSuccessfulAt) <= 9000
+  const statuses = statusFresh ? (scheduler.positions ?? {}) : {}
+  const active = [...openSymbols].map((tsym) => {
+    const recovery = reconciliationRequired.value[tsym]
+    const status = getPositionRiskStatus({
+      tsym,
+      recovery,
+      scheduler,
+      riskSyncAvailable: riskSyncAvailable.value
+    })
+    return `${tsym}: ${status}`
+  })
+  const recentlyClosed = Object.entries(riskRules.value)
+    .filter(([tsym, rule]) => !openSymbols.has(tsym) &&
+      (statuses[tsym] === 'CLOSED' || rule.status === 'closed') &&
+      Date.now() - Number(rule.updatedAt) < 5 * 60 * 1000)
+    .map(([tsym]) => `${tsym}: CLOSED`)
+  return [...active, ...recentlyClosed]
 })
 watch([serverManagedNotice, streamNotice, riskNotices], () => {
   systemNotices.value = [
@@ -797,8 +860,6 @@ watch([serverManagedNotice, streamNotice, riskNotices], () => {
 }, { immediate: true })
 let timer;
 let positionCheckInterval;
-let positionRefreshInterval;
-let positionRefreshInFlight = false;
 let brokerSelectionReady = false;
 
 watch([selectedBroker, brokerStatus], () => {
@@ -809,26 +870,6 @@ watch([selectedBroker, brokerStatus], () => {
     disconnectWebSocket();
   }
 });
-
-const refreshFlattradePositions = async () => {
-  if (
-    positionRefreshInFlight ||
-    activeTab.value !== 'positions' ||
-    selectedBroker.value?.brokerName !== 'Flattrade'
-  ) {
-    return;
-  }
-  positionRefreshInFlight = true;
-  try {
-    await fetchFlattradePositions();
-  } catch (error) {
-    flattradePositionsStale.value = true;
-    console.error('Unable to refresh Flattrade position data:', error.message);
-  } finally {
-    positionRefreshInFlight = false;
-  }
-};
-
 
 let accountRefreshInterval;
 
@@ -932,8 +973,7 @@ onMounted(async () => {
     checkStoplossesAndTargets();
     void checkUiRiskTriggers();
   }, 1000);
-  positionRefreshInterval = setInterval(refreshFlattradePositions, 60_000);
-  accountRefreshInterval = setInterval(refreshAccount, 5000);
+  accountRefreshInterval = setInterval(refreshAccount, 3000);
   accountRefreshHandler.value = refreshAccount;
 });
 
@@ -949,9 +989,6 @@ onBeforeUnmount(() => {
   clearInterval(accountRefreshInterval);
   accountRefreshHandler.value = null;
   systemNotices.value = [];
-  if (positionRefreshInterval) {
-    clearInterval(positionRefreshInterval);
-  }
 });
 
 

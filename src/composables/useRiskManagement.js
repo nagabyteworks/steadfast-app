@@ -14,6 +14,7 @@ import {
   riskRules,
   reconciliationRequired,
   riskSyncAvailable,
+  reconciliationStatus,
   flatTradePositionBook,
   shoonyaPositionBook,
   useUiTriggers,
@@ -45,6 +46,17 @@ const armedRule = (tsym) => {
   return rule?.status === 'armed' && !reconciliationRequired.value[tsym] ? rule : null
 }
 export const currentMonitor = () => useUiTriggers.value ? 'ui' : 'server'
+export const getPositionRiskStatus = ({
+  tsym, recovery, scheduler, riskSyncAvailable: syncAvailable, now = Date.now()
+}) => {
+  const lastSuccessfulAt = Number(scheduler?.lastSuccessfulAt)
+  const statusFresh = scheduler?.currentStatus === 'success' &&
+    Number.isFinite(lastSuccessfulAt) && now - lastSuccessfulAt <= 9000
+  const brokerStatus = statusFresh ? scheduler.positions?.[tsym] : null
+  if (recovery?.recoveryStatus === 'ACTION_REQUIRED') return 'ACTION REQUIRED'
+  if (recovery || !statusFresh || !syncAvailable) return 'OPEN – RECOVERING'
+  return brokerStatus || 'ACTION REQUIRED'
+}
 const round = (value) => Number(value.toFixed(2))
 
 export const getArmedRule = armedRule
@@ -71,9 +83,20 @@ export const syncRiskMirrors = () => {
 
 const announceOutcome = (rule) => {
   const key = `${rule.tsym}:${rule.updatedAt}`
-  if (rule.status === 'armed' || !rule.message || announcedOutcomes.has(key)) return
+  if (rule.status === 'armed' || announcedOutcomes.has(key)) return
   announcedOutcomes.add(key)
-  if (Date.now() - rule.updatedAt < OUTCOME_WINDOW_MS) notify(`${rule.tsym}: ${rule.message}`)
+  if (Date.now() - rule.updatedAt >= OUTCOME_WINDOW_MS) return
+  const status = rule.status === 'closed'
+    ? 'CLOSED'
+    : rule.status === 'exit_partially_filled'
+      ? 'EXIT PARTIALLY FILLED'
+      : ['exit_pending', 'triggered'].includes(rule.status)
+        ? 'EXITING'
+        : reconciliationStatus.value?.positions?.[rule.tsym] === 'ACTION REQUIRED' ||
+          reconciliationRequired.value[rule.tsym]?.recoveryStatus === 'ACTION_REQUIRED'
+          ? 'ACTION REQUIRED'
+          : 'OPEN – RECOVERING'
+  notify(`${rule.tsym}: ${status}`)
 }
 
 export const syncRiskRules = async () => {
@@ -81,13 +104,14 @@ export const syncRiskRules = async () => {
   try {
     const data = await fetchRiskRules()
     if (pendingSaves > 0) return
+    reconciliationRequired.value = Object.fromEntries((data.reconciliation ?? []).map((item) => [item.tsym, item]))
+    reconciliationStatus.value = data.reconciliationStatus ?? null
     const next = {}
     for (const rule of data.rules) {
       next[rule.tsym] = rule
       announceOutcome(rule)
     }
     riskRules.value = next
-    reconciliationRequired.value = Object.fromEntries((data.reconciliation ?? []).map((item) => [item.tsym, item]))
     riskSyncAvailable.value = true
     syncRiskMirrors()
     if (!monitorPreferenceApplied) {
@@ -96,6 +120,7 @@ export const syncRiskRules = async () => {
     }
   } catch (error) {
     riskSyncAvailable.value = false
+    reconciliationStatus.value = null
     logRequestError('Unable to load stop-loss and target rules', error)
   }
 }
@@ -106,7 +131,16 @@ const enqueue = (request) => {
     .then(request)
     .then(() => false, (error) => {
       logRequestError('Unable to save the stop-loss/target rule', error)
-      notify(error.response?.data?.message || 'Unable to save the stop-loss/target rule on the server.')
+      const responseMessage = error.response?.data?.message
+      const message = error.response?.data?.status === 'RECONCILIATION_REQUIRED' ||
+        error.code === 'RECONCILIATION_REQUIRED' ||
+        typeof responseMessage === 'string' &&
+          (responseMessage.startsWith('ACTION REQUIRED') || /needs reconciliation/i.test(responseMessage))
+        ? 'ACTION REQUIRED'
+        : responseMessage === 'OPEN – RECOVERING'
+          ? responseMessage
+          : responseMessage || 'Unable to save the stop-loss/target rule on the server.'
+      notify(message)
       return true
     })
     .then(async (failed) => {
@@ -131,7 +165,7 @@ export const updateRule = (position, fields, deltas = {}) => {
   const tsym = position.tsym
   const existing = armedRule(tsym)
   if (!existing) {
-    notify(`${tsym}: reconcile the opening fill before creating protection.`)
+    notify(`${tsym}: ACTION REQUIRED`)
     return false
   }
   const next = { ...existing, ...fields }
@@ -346,7 +380,7 @@ export const checkStoplossesAndTargets = async () => {
       reconciliationRequired.value = remaining
     } catch (error) {
       logRequestError('Unable to reconcile the opening fill', error)
-      notify(error.response?.data?.message || `${tsym}: opening fill could not be verified; reconcile the position manually.`)
+      notify(`${tsym}: OPEN – RECOVERING`)
       await syncRiskRules()
       success = false
     } finally {

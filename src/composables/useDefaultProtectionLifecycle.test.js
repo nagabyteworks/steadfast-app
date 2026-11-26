@@ -277,7 +277,7 @@ it('reports missing fill history without using the live or average price', async
   await submitBuy()
 
   expect(riskRules.value[symbol]).toBeUndefined()
-  expect(toastMessage.value).toMatch(/needs reconciliation/i)
+  expect(toastMessage.value).toBe(`${symbol}: OPEN – RECOVERING`)
 })
 
 it('refreshes suspended protection after default reconciliation fails', async () => {
@@ -285,7 +285,7 @@ it('refreshes suspended protection after default reconciliation fails', async ()
   flatTradePositionBook.value = [position(75, 150)]
   riskRules.value = { [symbol]: { tsym: symbol, status: 'armed', slPrice: 140 } }
   vi.mocked(createDefaultRiskRule).mockRejectedValueOnce({
-    response: { data: { message: 'Previous protection is suspended; verify with Flattrade' } }
+    response: { data: { message: 'Previous protection is suspended; automatic recovery is pending' } }
   })
   vi.mocked(fetchRiskRules).mockResolvedValueOnce({
     rules: [{ tsym: symbol, status: 'reconciliation_required', slPrice: 140 }],
@@ -294,5 +294,5 @@ it('refreshes suspended protection after default reconciliation fails', async ()
   await submitBuy()
   expect(riskRules.value[symbol].status).toBe('reconciliation_required')
   expect(reconciliationRequired.value[symbol].status).toBe('RECONCILIATION_REQUIRED')
-  expect(toastMessage.value).toMatch(/protection is suspended/i)
+  expect(toastMessage.value).toBe(`${symbol}: OPEN – RECOVERING`)
 })

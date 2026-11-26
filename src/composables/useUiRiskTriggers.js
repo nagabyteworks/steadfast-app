@@ -87,7 +87,7 @@ export const checkUiRiskTriggers = async () => {
         }
       } catch (error) {
         logRequestError(`Unable to process UI-monitored protection for ${tsym}`, error)
-        notify(`${tsym}: UI-monitored trigger failed; verify the position and protection with Flattrade.`)
+        notify(`${tsym}: OPEN – RECOVERING`)
       } finally {
         inFlight.delete(tsym)
       }
@@ -106,7 +106,7 @@ export const checkUiRiskTriggers = async () => {
           continue
         }
         logRequestError(`Unable to advance UI-monitored protection for ${tsym}`, error)
-        notify(`${tsym}: trailing protection could not be updated; verify it with Flattrade.`)
+        notify(`${tsym}: OPEN – RECOVERING`)
       } finally {
         inFlight.delete(tsym)
       }

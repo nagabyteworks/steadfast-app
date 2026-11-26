@@ -126,5 +126,5 @@ it('warns that a network failure leaves the order status uncertain', async () =>
   await placeOrder('BUY', 'CALL')
 
   expect(post).toHaveBeenCalledTimes(1)
-  expect(toastMessage.value).toMatch(/uncertain.*before retrying/i)
+  expect(toastMessage.value).toMatch(/uncertain.*do not retry yet/i)
 })

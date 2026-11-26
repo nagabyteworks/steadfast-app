@@ -1,7 +1,7 @@
 <template>
     <div v-if="accountRefreshHandler" class="d-flex align-items-center text-nowrap flex-shrink-0">
         <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" :disabled="accountRefreshing"
-            title="Refresh from Flattrade (auto every 5 seconds)" @click="accountRefreshHandler">
+            title="Refresh broker data (auto every 3 seconds)" @click="accountRefreshHandler">
             <span v-if="accountRefreshing" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
             <span v-else>&#x21bb;</span>
             Refresh

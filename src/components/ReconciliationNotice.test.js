@@ -3,11 +3,9 @@ import { mount } from '@vue/test-utils'
 import { expect, it } from 'vitest'
 import ReconciliationNotice from './ReconciliationNotice.vue'
 
-it('explains missing verification without offering an unverified override', () => {
-  const notice = mount(ReconciliationNotice, { props: { message: 'opening fill unavailable' } })
-  expect(notice.text()).toContain('RECONCILIATION_REQUIRED: opening fill unavailable')
-  expect(notice.text()).toContain('A user confirmation or uploaded document alone is not proof')
-  expect(notice.text()).toContain('not yet available')
+it('shows only the simple recovery status', () => {
+  const notice = mount(ReconciliationNotice, { props: { status: 'ACTION REQUIRED' } })
+  expect(notice.text()).toBe('ACTION REQUIRED')
   expect(notice.find('button').exists()).toBe(false)
   expect(notice.find('input').exists()).toBe(false)
 })

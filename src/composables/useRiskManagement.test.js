@@ -8,6 +8,7 @@ import {
   flatTradePositionBook,
   positionLTPs,
   reconciliationRequired,
+  reconciliationStatus,
   riskRules,
   showToast,
   stoplosses,
@@ -35,10 +36,41 @@ import { createManualRiskRule, deleteRiskRule, fetchRiskRules, patchRiskRule } f
 import {
   decreaseStoploss, decreaseTarget, dropRule, increaseStoploss, increaseTarget,
   removeStoploss, removeTarget, setStoploss, setStoplossPrice, setTarget, setTargetPrice,
-  currentMonitor, syncRiskMirrors, syncRiskRules, toggleTargetTrail, updateRule
+  currentMonitor, getPositionRiskStatus, syncRiskMirrors, syncRiskRules, toggleTargetTrail, updateRule
 } from './useRiskManagement'
 
 const position = { tsym: 'NIFTYCE', exch: 'NFO', token: '123', netqty: '50', netavgprc: '100' }
+
+it('never reports protection from a failed or stale reconciliation cycle', () => {
+  const previousProtection = {
+    currentStatus: 'success',
+    lastSuccessfulAt: 1000,
+    positions: { NIFTYCE: 'OPEN – PROTECTED' }
+  }
+  expect(getPositionRiskStatus({
+    tsym: 'NIFTYCE', scheduler: { ...previousProtection, currentStatus: 'failed' },
+    riskSyncAvailable: true, now: 2000
+  })).toBe('OPEN – RECOVERING')
+  expect(getPositionRiskStatus({
+    tsym: 'NIFTYCE', scheduler: previousProtection, riskSyncAvailable: true, now: 11000
+  })).toBe('OPEN – RECOVERING')
+})
+
+it('uses fresh broker status and preserves ACTION REQUIRED for unresolved positions', () => {
+  const scheduler = {
+    currentStatus: 'success', lastSuccessfulAt: 5000,
+    positions: { NIFTYCE: 'OPEN – PROTECTED' }
+  }
+  expect(getPositionRiskStatus({
+    tsym: 'NIFTYCE', scheduler, riskSyncAvailable: true, now: 6000
+  })).toBe('OPEN – PROTECTED')
+  expect(getPositionRiskStatus({
+    tsym: 'NIFTYCE',
+    recovery: { recoveryStatus: 'ACTION_REQUIRED' },
+    scheduler: { ...scheduler, currentStatus: 'failed' },
+    riskSyncAvailable: true, now: 6000
+  })).toBe('ACTION REQUIRED')
+})
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -54,6 +86,7 @@ beforeEach(() => {
   positionLTPs.value = { NIFTYCE: 100 }
   riskRules.value = {}
   reconciliationRequired.value = {}
+  reconciliationStatus.value = null
   showToast.value = false
   patchRiskRule.mockResolvedValue({})
   deleteRiskRule.mockResolvedValue({})
@@ -187,7 +220,7 @@ it('does not create manual protection when the first fill is unavailable', async
   })
   expect(await setStoploss(position, 'static')).toBe(false)
   expect(riskRules.value.NIFTYCE).toBeUndefined()
-  expect(toastMessage.value).toMatch(/needs reconciliation/i)
+  expect(toastMessage.value).toBe('ACTION REQUIRED')
 })
 
 it('converts an existing stop to trailing and back without changing its level', () => {
@@ -257,25 +290,34 @@ it('mirrors only armed rules and clears removed rules', () => {
   expect(targets.value.NIFTYCE).toBeNull()
 })
 
-it('loads server outcomes and announces a recent failure', async () => {
+it('loads server outcomes and announces a concise recovery status', async () => {
   fetchRiskRules.mockResolvedValue({ rules: [armed({ status: 'failed', message: 'exit failed', updatedAt: Date.now() })] })
   await vi.waitFor(async () => {
     await syncRiskRules()
     expect(riskRules.value.NIFTYCE?.status).toBe('failed')
   })
 
-  expect(toastMessage.value).toContain('exit failed')
+  expect(toastMessage.value).toBe('NIFTYCE: OPEN – RECOVERING')
   expect(showToast.value).toBe(true)
 })
 
 it('retains and clears server reconciliation flags when risk rules are refreshed', async () => {
   fetchRiskRules.mockResolvedValue({
     rules: [],
-    reconciliation: [{ tsym: 'NIFTYCE', status: 'RECONCILIATION_REQUIRED', message: 'opening fill unavailable' }]
+    reconciliation: [{
+      tsym: 'NIFTYCE', status: 'RECONCILIATION_REQUIRED',
+      recoveryStatus: 'ACTION_REQUIRED', message: 'opening fill unavailable'
+    }],
+    reconciliationStatus: {
+      running: true, currentStatus: 'success', activePositionCount: 1,
+      positions: { NIFTYCE: 'ACTION REQUIRED' }
+    }
   })
   await syncRiskRules()
   expect(reconciliationRequired.value.NIFTYCE?.status).toBe('RECONCILIATION_REQUIRED')
+  expect(reconciliationStatus.value.positions.NIFTYCE).toBe('ACTION REQUIRED')
   fetchRiskRules.mockResolvedValue({ rules: [], reconciliation: [] })
   await syncRiskRules()
   expect(reconciliationRequired.value.NIFTYCE).toBeUndefined()
+  expect(reconciliationStatus.value).toBeNull()
 })
