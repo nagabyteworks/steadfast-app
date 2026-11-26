@@ -4,7 +4,9 @@ import {
   fundLimits,
   flatTradePositionBook,
   shoonyaPositionBook,
-  positionLTPs
+  positionLTPs,
+  flatTradeBook,
+  shoonyaTradeBook
 } from '@/stores/globalStore'
 
 export const availableBalance = computed(() => {
@@ -98,56 +100,107 @@ export const totalCapitalPercentage = computed(() => {
   const totalMoney = Number(availableBalance.value) + Number(usedAmount.value)
   return totalMoney ? (Number(netPnl.value) / totalMoney) * 100 : 0
 })
-export const totalBrokerage = computed(() => {
-  let total = 0
 
-  // Calculate totalValue based on totalBuyValue and totalSellValue
-  const totalEquityValue = totalEquityBuyValue.value + totalEquitySellValue.value
-  const totalDerivativeValue = totalDerivativeBuyValue.value + totalDerivativeSellValue.value
+const roundToPaise = (amount) => Math.round((amount + Number.EPSILON) * 100) / 100
+const numericValue = (value) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
 
-  if (
-    selectedBroker.value?.brokerName === 'Flattrade' ||
-    selectedBroker.value?.brokerName === 'Shoonya'
-  ) {
-    // Calculate charges for Flattrade and Shoonya (they have the same structure)
-    const equityExchangeCharge = Math.round(totalEquityValue * 0.00003485 * 100) / 100 //avage price from both exchange
-    const equityIpftCharge = Math.round(totalEquityValue * 0.000001 * 100) / 100
-    const equitySebiCharge = Math.round(totalEquityValue * 0.000001 * 100) / 100
-    const equityGstCharge =
-      Math.round((equityExchangeCharge + equitySebiCharge + equityIpftCharge) * 18) / 100
-    const equityStampdutyCharge = Math.round(totalEquityBuyValue.value * 0.00003)
-    const equitySttCharge = Math.round(totalEquitySellValue.value * 0.00025)
-
-    const derivativesExchangeCharge = Math.round(totalDerivativeValue * 0.000495 * 100) / 100
-    const derivativesIpftCharge = Math.round(totalDerivativeValue * 0.000005 * 100) / 100
-    const derivativesSebiCharge = Math.round(totalDerivativeValue * 0.000001 * 100) / 100
-    const derivativesGstCharge =
-      Math.round((derivativesExchangeCharge + derivativesIpftCharge + derivativesSebiCharge) * 18) /
-      100
-    const derivativesStampdutyCharge = Math.round(totalDerivativeBuyValue.value * 0.00003)
-    const derivativesSttCharge = Math.round(totalDerivativeSellValue.value * 0.000625)
-
-    // Add charges to total for Flattrade and Shoonya
-    total +=
-      equityExchangeCharge +
-      equityIpftCharge +
-      equitySebiCharge +
-      equityGstCharge +
-      equityStampdutyCharge +
-      equitySttCharge +
-      derivativesExchangeCharge +
-      derivativesIpftCharge +
-      derivativesSebiCharge +
-      derivativesGstCharge +
-      derivativesStampdutyCharge +
-      derivativesSttCharge
-
-    // No additional brokerage for Flattrade and Shoonya
+export const estimateTradingCharges = ({ brokerName, positions = [], trades = [] }) => {
+  if (!['Flattrade', 'Shoonya'].includes(brokerName)) {
+    return { tax: 0, other: 0, brokerage: 0, total: 0 }
   }
 
-  return total
-})
-export const netPnl = computed(() => totalProfit.value - totalBrokerage.value)
+  let stt = 0
+  let stampDuty = 0
+  let transaction = 0
+  let sebi = 0
+  let ipft = 0
+
+  for (const position of positions) {
+    const exchange = position.exch
+    const buyValue = numericValue(position.daybuyamt)
+    const sellValue = numericValue(position.daysellamt)
+    const turnover = buyValue + sellValue
+
+    if (exchange === 'NFO' || exchange === 'BFO') {
+      const transactionRate = exchange === 'NFO' ? 0.0003553 : 0.000325
+      transaction += turnover * transactionRate
+      sebi += turnover * 0.000001
+      ipft += turnover * (brokerName === 'Flattrade' ? 0.000005 : 0.000000001)
+      stt += sellValue * 0.0015
+      stampDuty += buyValue * 0.00003
+      continue
+    }
+
+    if (exchange === 'NSE' || exchange === 'BSE') {
+      const product = position.prd === 'I' ? 'intraday' : 'delivery'
+      const transactionRate = exchange === 'NSE' ? 0.0000307 : 0.0000375
+      transaction += turnover * transactionRate
+      sebi += turnover * 0.000001
+      ipft += turnover * (brokerName === 'Flattrade' ? 0.000001 : 0.000000001)
+      stt += product === 'intraday'
+        ? sellValue * 0.00025
+        : turnover * 0.001
+      stampDuty += buyValue * (product === 'intraday' ? 0.00003 : 0.00015)
+    }
+  }
+
+  let brokerage = 0
+  if (brokerName === 'Shoonya') {
+    const orders = new Map()
+    for (const trade of trades) {
+      if (!trade.norenordno) continue
+      const tradeValue = numericValue(trade.flqty ?? trade.qty) *
+        numericValue(trade.flprc ?? trade.prc)
+      const order = orders.get(trade.norenordno) || {
+        exchange: trade.exch,
+        product: trade.prd,
+        turnover: 0
+      }
+      order.turnover += tradeValue
+      orders.set(
+        trade.norenordno,
+        order
+      )
+    }
+    brokerage = [...orders.values()].reduce((total, order) => {
+      if (order.exchange === 'NFO' || order.exchange === 'BFO') return total + 5
+      if ((order.exchange === 'NSE' || order.exchange === 'BSE') && order.product === 'I') {
+        return total + Math.min(5, order.turnover * 0.0003)
+      }
+      return total
+    }, 0)
+  }
+
+  const other = roundToPaise(transaction + sebi + ipft)
+  const gstBase = transaction + sebi + brokerage +
+    (brokerName === 'Shoonya' ? ipft : 0)
+  const tax = roundToPaise(stt + stampDuty + gstBase * 0.18)
+  brokerage = roundToPaise(brokerage)
+  return {
+    tax,
+    other,
+    brokerage,
+    total: roundToPaise(tax + other + brokerage)
+  }
+}
+
+const tradingCharges = computed(() => estimateTradingCharges({
+  brokerName: selectedBroker.value?.brokerName,
+  positions: selectedBroker.value?.brokerName === 'Flattrade'
+    ? flatTradePositionBook.value
+    : shoonyaPositionBook.value,
+  trades: selectedBroker.value?.brokerName === 'Flattrade'
+    ? flatTradeBook.value
+    : shoonyaTradeBook.value
+}))
+export const totalTax = computed(() => tradingCharges.value.tax)
+export const otherTradingCharges = computed(() => tradingCharges.value.other)
+export const totalBrokerage = computed(() => tradingCharges.value.brokerage)
+export const totalTradingCharges = computed(() => tradingCharges.value.total)
+export const netPnl = computed(() => roundToPaise(totalProfit.value - totalTradingCharges.value))
 export const totalBuyValue = computed(() => {
   if (selectedBroker.value?.brokerName === 'Flattrade') {
     return flatTradePositionBook.value.reduce(

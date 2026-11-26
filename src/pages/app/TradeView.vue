@@ -454,7 +454,9 @@
 
   <!-- Total Profit & Net PNL -->
   <PnlComponent :stickyMTM="stickyMTM" :totalCapitalPercentage="totalCapitalPercentage" :totalProfit="totalProfit"
-    :totalNetQty="totalNetQty" :netPnl="netPnl" :riskReached="riskReached" :targetReached="targetReached" />
+    :totalNetQty="totalNetQty" :totalTax="totalTax" :otherTradingCharges="otherTradingCharges"
+    :totalBrokerage="totalBrokerage" :totalTradingCharges="totalTradingCharges" :netPnl="netPnl"
+    :riskReached="riskReached" :targetReached="targetReached" />
 
   <!-- Positions & Trades -->
   <section class="row pb-3">
@@ -753,6 +755,10 @@ import {
   totalBuyValue,
   totalSellValue,
   totalCapitalPercentage,
+  totalTax,
+  otherTradingCharges,
+  totalBrokerage,
+  totalTradingCharges,
 } from '@/composables/usePnlCalculations'
 
 const isServerManaged = usesServerManagedAccount;
