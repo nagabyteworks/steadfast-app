@@ -1,5 +1,5 @@
 import { nextTick } from 'vue'
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 
 vi.hoisted(() => {
   vi.stubGlobal('localStorage', jsdom.window.localStorage)
@@ -10,10 +10,27 @@ vi.mock('@/api/riskRules', () => ({
 }))
 vi.mock('@/composables/useOrderManagement', () => ({ closePosition: vi.fn() }))
 import { evaluateRule } from '@/composables/useUiRiskTriggers'
-import { enableStoploss, enableTarget, enableTargetTrail } from '@/stores/globalStore'
+import { closePosition } from '@/composables/useOrderManagement'
+import {
+  enableStoploss,
+  enableTarget,
+  enableTargetTrail,
+  flatTradePositionBook,
+  positionLTPs,
+  riskRules,
+  shoonyaPositionBook
+} from '@/stores/globalStore'
 
 const rule = (overrides = {}) => ({
   side: 'long', mode: 'static', slPrice: 90, slPoints: 10, targetPrice: 120, trailPoints: 5, ...overrides
+})
+
+afterEach(() => {
+  flatTradePositionBook.value = []
+  shoonyaPositionBook.value = []
+  positionLTPs.value = {}
+  riskRules.value = {}
+  closePosition.mockReset()
 })
 
 describe('evaluateRule', () => {
@@ -38,6 +55,34 @@ describe('evaluateRule', () => {
   it('target trailing moves the stop to the target and advances the target without exiting', () => {
     const result = evaluateRule(rule({ mode: 'target_trail' }), 126)
     expect(result).toMatchObject({ changed: true, reason: null, slPrice: 125, targetPrice: 130 })
+  })
+
+  it('immediately triggers an edited target already crossed by the current LTP', async () => {
+    const position = { tsym: 'NIFTYCE', netqty: 1 }
+    closePosition.mockResolvedValue(true)
+    flatTradePositionBook.value = [position]
+    positionLTPs.value = { NIFTYCE: 115 }
+    riskRules.value = {
+      NIFTYCE: rule({ tsym: 'NIFTYCE', status: 'armed', monitor: 'ui', targetPrice: 110 })
+    }
+
+    await nextTick()
+
+    expect(closePosition).toHaveBeenCalledWith(position)
+  })
+
+  it('immediately triggers an edited stop-loss already crossed by the current LTP', async () => {
+    const position = { tsym: 'NIFTYCE2', netqty: 1 }
+    closePosition.mockResolvedValue(true)
+    flatTradePositionBook.value = [position]
+    positionLTPs.value = { NIFTYCE2: 115 }
+    riskRules.value = {
+      NIFTYCE2: rule({ tsym: 'NIFTYCE2', status: 'armed', monitor: 'ui', slPrice: 120, targetPrice: null })
+    }
+
+    await nextTick()
+
+    expect(closePosition).toHaveBeenCalledWith(position)
   })
 })
 

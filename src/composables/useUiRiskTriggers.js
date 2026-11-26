@@ -1,3 +1,4 @@
+import { watch } from 'vue'
 import { positionLTPs, riskRules, flatTradePositionBook, shoonyaPositionBook, toastMessage, showToast } from '@/stores/globalStore'
 import { getArmedRule, updateRule, dropRule } from '@/composables/useRiskManagement'
 import { closePosition } from '@/composables/useOrderManagement'
@@ -92,3 +93,7 @@ export const checkUiTriggers = () => {
     }
   }
 }
+
+// Recheck immediately after a rule is edited or synchronized, rather than waiting for the
+// next periodic check. This catches levels that are already breached by the current LTP.
+watch(riskRules, checkUiTriggers, { flush: 'post' })
