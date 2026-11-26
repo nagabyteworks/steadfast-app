@@ -332,7 +332,7 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
           ret: 'DAY'
         }
         if (selectedBroker.value?.brokerName === 'Flattrade') {
-          orderData.prc = marketableLimitPrice(positionLTPs.value[position.tsym], transactionType)
+          orderData.prc = marketableLimitPrice(positionLTPs.value[position.tsym] ?? position.lp, transactionType)
           orderData.prctyp = 'LMT'
         }
       }
@@ -386,6 +386,12 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
     showToast.value = true
     return false
   }
+}
+export const closePosition = async (position) => {
+  const netqty = Number(position.netqty)
+  if (!netqty) return
+  if (!window.confirm(`Exit ${getSymbol(position)} (${Math.abs(netqty)} qty)?`)) return
+  await placeOrderForPosition(netqty > 0 ? 'S' : 'B', position.tsym.includes('C') ? 'CALL' : 'PUT', position)
 }
 export const closeAllPositions = async () => {
   try {

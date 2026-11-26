@@ -16,6 +16,7 @@
                     <th scope="col">S.Avg</th>
                     <th scope="col">Realized</th>
                     <th scope="col">Unrealized</th>
+                    <th scope="col">Exit</th>
                 </tr>
             </thead>
             <tbody>
@@ -143,10 +144,16 @@
                             :class="position.calculatedUrmtom > 0 ? 'text-success' : position.calculatedUrmtom < 0 ? 'text-danger' : null">
                             {{ position.calculatedUrmtom != null ? formatPrice(position.calculatedUrmtom) : '-' }}
                         </td>
+                        <td>
+                            <button v-if="position.netqty != 0" class="btn btn-outline-danger btn-xs" title="Exit position"
+                                @click="$emit('exit-position', position)">
+                                Exit ✖
+                            </button>
+                        </td>
                     </tr>
                 </template>
                 <tr v-else>
-                    <td colspan="13" class="text-center">
+                    <td colspan="14" class="text-center">
                         No positions on selected broker {{ selectedBroker.brokerName }}
                     </td>
                 </tr>
@@ -250,6 +257,9 @@
                         @click="$emit('remove-target', position)">
                         Remove Target
                     </button>
+                    <button class="btn btn-danger btn-sm ms-auto" @click="$emit('exit-position', position)">
+                        Exit ✖
+                    </button>
                 </div>
             </div>
         </div>
@@ -292,6 +302,7 @@ const emit = defineEmits([
     'edit-stoploss',
     'edit-target',
     'toggle-target-trail',
+    'exit-position',
 ]);
 
 

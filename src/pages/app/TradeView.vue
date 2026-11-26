@@ -482,7 +482,7 @@
                 @set-stoploss="(position, type) => setStoploss(position, type)" @remove-stoploss="removeStoploss"
                 @increase-stoploss="increaseStoploss" @decrease-stoploss="decreaseStoploss" @set-target="setTarget"
                 @remove-target="removeTarget" @increase-target="increaseTarget" @decrease-target="decreaseTarget"
-                @edit-stoploss="setStoplossPrice" @edit-target="setTargetPrice" @toggle-target-trail="toggleTargetTrail" />
+                @edit-stoploss="setStoplossPrice" @edit-target="setTargetPrice" @toggle-target-trail="toggleTargetTrail" @exit-position="closePosition" />
 
               <!-- Shoonya Positions -->
               <PositionsTableComponent v-if="activeFetchFunction === 'fetchShoonyaPositions'"
@@ -492,7 +492,7 @@
                 @set-stoploss="(position, type) => setStoploss(position, type)" @remove-stoploss="removeStoploss"
                 @increase-stoploss="increaseStoploss" @decrease-stoploss="decreaseStoploss" @set-target="setTarget"
                 @remove-target="removeTarget" @increase-target="increaseTarget" @decrease-target="decreaseTarget"
-                @edit-stoploss="setStoplossPrice" @edit-target="setTargetPrice" @toggle-target-trail="toggleTargetTrail" />
+                @edit-stoploss="setStoplossPrice" @edit-target="setTargetPrice" @toggle-target-trail="toggleTargetTrail" @exit-position="closePosition" />
 
               <p class="text-secondary my-2">
                 Stop-losses, trailing stop-losses, targets and target trails are stored and monitored by the server
@@ -659,7 +659,7 @@ import { availableBrokers, brokerStatus } from '@/composables/useBrokerFunctions
 import { productTypes, getProductTypeValue, updateAvailableQuantities, orderTypes, displayOrderTypes, selectedLots, loadLots, updateSelectedQuantity, updateStrikesForExpiry } from '@/composables/useTradeConfiguration'
 
 // Order Management Composables
-import { closeAllPositions, cancelPendingOrders, closeSelectedPositions } from '@/composables/useOrderManagement'
+import { closeAllPositions, cancelPendingOrders, closeSelectedPositions, closePosition } from '@/composables/useOrderManagement'
 
 // Risk Management Composables
 import { checkStoplossesAndTargets, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget, setStoplossPrice, setTargetPrice, toggleTargetTrail, syncRiskRules } from '@/composables/useRiskManagement'
