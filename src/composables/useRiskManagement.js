@@ -1,4 +1,3 @@
-import { watch } from 'vue'
 import { usesServerManagedAccount } from '@/config/profile'
 import {
   stoplossValue,
@@ -14,7 +13,6 @@ import {
   riskRules,
   reconciliationRequired,
   riskSyncAvailable,
-  useUiTriggers,
   flatTradePositionBook,
   shoonyaPositionBook,
   toastMessage,
@@ -43,7 +41,7 @@ const armedRule = (tsym) => {
   const rule = riskRules.value[tsym]
   return rule?.status === 'armed' && !reconciliationRequired.value[tsym] ? rule : null
 }
-export const currentMonitor = () => (useUiTriggers.value ? 'ui' : 'server')
+export const currentMonitor = () => 'server'
 const round = (value) => Number(value.toFixed(2))
 
 export const getArmedRule = armedRule
@@ -320,9 +318,9 @@ export const checkStoplossesAndTargets = async () => {
       const rule = await createDefaultRiskRule(tsym, {
         stopPoints: enableStoploss.value ? Number(stoplossValue.value) : null,
         targetPoints: enableTarget.value ? Number(targetValue.value) : null,
-        trailingStop: enableTrailingStoploss.value,
-        targetTrailing: enableTargetTrail.value,
-        trailPoints: enableTargetTrail.value ? Number(targetTrailValue.value) : null,
+        trailingStop: false,
+        targetTrailing: false,
+        trailPoints: null,
         monitor: currentMonitor()
       })
       keepSaved(rule)
@@ -340,15 +338,3 @@ export const checkStoplossesAndTargets = async () => {
   }
   return success
 }
-
-// Hands every armed rule to whoever is now responsible for watching it.
-watch(useUiTriggers, (ui) => {
-  const monitor = ui ? 'ui' : 'server'
-  console.log(`[risk] trigger source switched to ${ui ? 'UI (this page)' : 'server (WebSocket service)'}`)
-  if (!usesServerManagedAccount) return
-  for (const rule of Object.values(riskRules.value)) {
-    if (rule.status !== 'armed' || rule.monitor === monitor) continue
-    keepSaved({ ...rule, monitor })
-    enqueue(async () => keepSaved({ ...rule, ...(await patchRiskRule(rule.tsym, { monitor })) }))
-  }
-})

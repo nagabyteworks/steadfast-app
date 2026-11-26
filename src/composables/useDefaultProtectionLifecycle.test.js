@@ -50,10 +50,10 @@ import { placeOrder } from './useOrderManagement'
 import { createDefaultRiskRule, fetchRiskRules } from '@/api/riskRules'
 import { updateOrdersAndPositions } from '@/composables/usePositionManagement'
 import {
-  enableStoploss, enableTarget, enableTargetTrail, enableTrailingStoploss,
+  enableStoploss, enableTarget,
   flatTradeBook, flatTradePositionBook, flattradePositionsStale, latestCallLTP, lotsPerSymbol, positionLTPs,
   reconciliationRequired, riskRules, selectedBroker, selectedCallStrike, selectedExchange, selectedMasterSymbol,
-  selectedOrderType, selectedProductType, showToast, stoplossValue, targetTrailValue, targetValue, toastMessage
+  selectedOrderType, selectedProductType, showToast, stoplossValue, targetValue, toastMessage
 } from '@/stores/globalStore'
 
 const symbol = 'NIFTYCE'
@@ -65,10 +65,9 @@ const fill = (id, side, price, time) => ({
   trantype: side, flqty: '75', flprc: String(price), fltm: `26-11-2026 ${time}`
 })
 const modes = [
-  { name: 'fixed stop-loss', stop: true, target: false, trailing: false, targetTrail: false, expected: { mode: 'static', slPrice: 140, targetPrice: null } },
-  { name: 'fixed target', stop: false, target: true, trailing: false, targetTrail: false, expected: { mode: 'static', slPrice: null, targetPrice: 170 } },
-  { name: 'trailing stop-loss', stop: true, target: false, trailing: true, targetTrail: false, expected: { mode: 'trailing_sl', slPrice: 140, targetPrice: null, slPoints: 10 } },
-  { name: 'target trailing', stop: true, target: true, trailing: false, targetTrail: true, expected: { mode: 'target_trail', slPrice: 140, targetPrice: 170, trailPoints: 5 } }
+  { name: 'fixed stop-loss', stop: true, target: false, expected: { mode: 'static', slPrice: 140, targetPrice: null } },
+  { name: 'fixed target', stop: false, target: true, expected: { mode: 'static', slPrice: null, targetPrice: 170 } },
+  { name: 'fixed stop-loss and target', stop: true, target: true, expected: { mode: 'static', slPrice: 140, targetPrice: 170 } }
 ]
 
 beforeEach(async () => {
@@ -83,9 +82,6 @@ beforeEach(async () => {
   lotsPerSymbol.value = { NIFTY: 1 }
   stoplossValue.value = 10
   targetValue.value = 20
-  targetTrailValue.value = 5
-  enableTargetTrail.value = false
-  enableTrailingStoploss.value = false
   flattradePositionsStale.value = false
   await nextTick()
   riskRules.value = {}
@@ -104,8 +100,6 @@ afterEach(() => {
 const configure = async (mode) => {
   enableStoploss.value = mode.stop
   enableTarget.value = mode.target
-  enableTrailingStoploss.value = mode.trailing
-  enableTargetTrail.value = mode.targetTrail
   await nextTick()
 }
 
@@ -127,6 +121,7 @@ describe.each(modes)('default $name lifecycle', (mode) => {
       flatTradeBook.value = [...flatTradeBook.value, fill('3', 'B', 150, '09:25:00')]
       flatTradePositionBook.value = [position(75, 125)]
     })
+
     latestCallLTP.value = '155'
     positionLTPs.value = { [symbol]: 155 }
     if (staleRule) {
@@ -142,6 +137,9 @@ describe.each(modes)('default $name lifecycle', (mode) => {
     await submitBuy()
 
     expect(riskRules.value[symbol]).toMatchObject({ entry: 150, ...mode.expected })
+    expect(createDefaultRiskRule).toHaveBeenLastCalledWith(symbol, expect.objectContaining({
+      trailingStop: false, targetTrailing: false, trailPoints: null
+    }))
   })
 
   it('keeps the first open fill and existing levels when another lot is bought', async () => {
@@ -172,8 +170,24 @@ describe.each(modes)('default $name lifecycle', (mode) => {
   })
 })
 
+it('does not create automatic protection when both toggles are disabled', async () => {
+  vi.mocked(createDefaultRiskRule).mockClear()
+  await configure({ stop: false, target: false })
+  flatTradePositionBook.value = [position(0, 100)]
+  vi.mocked(updateOrdersAndPositions).mockImplementationOnce(async () => {
+    flatTradeBook.value = [fill('1', 'B', 150, '09:25:00')]
+    flatTradePositionBook.value = [position(75, 150)]
+  })
+  latestCallLTP.value = '155'
+
+  await submitBuy()
+
+  expect(createDefaultRiskRule).not.toHaveBeenCalled()
+  expect(riskRules.value[symbol]).toBeUndefined()
+})
+
 it('preserves manually adjusted trailing levels when another lot is bought', async () => {
-  await configure(modes[3])
+  await configure(modes[2])
   flatTradeBook.value = [
     fill('3', 'B', 150, '09:25:00')
   ]
@@ -202,12 +216,12 @@ it('preserves manually adjusted trailing levels when another lot is bought', asy
 })
 
 it('does not overwrite an existing rule when the refreshed position book is stale', async () => {
-  await configure(modes[3])
+  await configure(modes[2])
   flatTradePositionBook.value = [position(75, 150)]
   riskRules.value = {
     [symbol]: {
       tsym: symbol, status: 'armed', instrument: 'NFO|123', side: 'long', entry: 150,
-      monitor: 'server', ...modes[3].expected
+      monitor: 'server', ...modes[2].expected
     }
   }
   vi.mocked(updateOrdersAndPositions).mockImplementationOnce(async () => {
@@ -218,7 +232,7 @@ it('does not overwrite an existing rule when the refreshed position book is stal
 
   await submitBuy()
 
-  expect(riskRules.value[symbol]).toMatchObject({ entry: 150, ...modes[3].expected })
+  expect(riskRules.value[symbol]).toMatchObject({ entry: 150, ...modes[2].expected })
   expect(showToast.value).toBe(true)
   expect(toastMessage.value).toMatch(/position data is stale/i)
 })

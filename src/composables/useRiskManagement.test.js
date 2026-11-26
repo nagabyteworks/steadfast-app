@@ -16,8 +16,7 @@ import {
   targetTrailValue,
   targetValue,
   trailingStoplosses,
-  toastMessage,
-  useUiTriggers
+  toastMessage
 } from '@/stores/globalStore'
 
 vi.hoisted(() => {
@@ -263,15 +262,4 @@ it('retains and clears server reconciliation flags when risk rules are refreshed
   fetchRiskRules.mockResolvedValue({ rules: [], reconciliation: [] })
   await syncRiskRules()
   expect(reconciliationRequired.value.NIFTYCE).toBeUndefined()
-})
-
-it('moves armed rules to the selected monitor', async () => {
-  useUiTriggers.value = false
-  await nextTick()
-  riskRules.value = { NIFTYCE: armed() }
-  useUiTriggers.value = true
-  await nextTick()
-  expect(riskRules.value.NIFTYCE.monitor).toBe('ui')
-  useUiTriggers.value = false
-  await nextTick()
 })

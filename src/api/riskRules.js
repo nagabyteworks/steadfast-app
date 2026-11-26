@@ -10,5 +10,3 @@ export const createDefaultRiskRule = async (tsym, settings) => (await axios.post
 export const createManualRiskRule = async (tsym, settings) => (await axios.post(`${ruleUrl(tsym)}/manual`, settings)).data
 export const patchRiskRule = async (tsym, patch) => (await axios.patch(ruleUrl(tsym), patch)).data
 export const deleteRiskRule = async (tsym) => (await axios.delete(ruleUrl(tsym))).data
-export const triggerUiRiskRule = async (tsym, reason, ltp, rev) =>
-  (await axios.post(`${BASE_URL}/flattrade/risk/trigger`, { tsym, reason, ltp, rev })).data

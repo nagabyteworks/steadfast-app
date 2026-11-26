@@ -335,6 +335,7 @@ const protectionStatus = (position) => {
     const rule = riskRules.value[position.tsym]
     if (reconciliationRequired.value[position.tsym] || rule?.status === 'reconciliation_required') return 'RECONCILIATION_REQUIRED'
     if (rule?.status === 'reconciliation_in_progress') return 'RECONCILIATION_IN_PROGRESS'
+    if (['triggered', 'exit_pending', 'exit_partially_filled'].includes(rule?.status)) return 'EXITING'
     return riskSyncAvailable.value && Number(position.netqty) !== 0 && rule?.status === 'armed' ? 'PROTECTED' : 'UNPROTECTED'
 }
 

@@ -137,9 +137,6 @@ export const targetValue = useLocalStorage('targetValue', 20)
 export const enableTrailingStoploss = useLocalStorage('enableTrailingStoploss', false)
 export const enableTargetTrail = useLocalStorage('enableTargetTrail', true)
 export const targetTrailValue = useLocalStorage('targetTrailValue', 10)
-// true: this app watches the price and sends the exit (works only while the page is open);
-// false: the server (WebSocket service) watches and exits, even when the page is closed.
-export const useUiTriggers = useLocalStorage('useUiTriggers', false)
 // Server-side stop-loss/target rules keyed by trading symbol.
 export const riskRules = ref({})
 export const reconciliationRequired = ref({})

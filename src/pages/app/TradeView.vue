@@ -94,15 +94,6 @@
                 />
               <span class="input-group-text">Points</span>
             </div>
-            <div class="form-check form-switch d-flex align-items-center gap-2 ps-0 mb-2">
-              <input class="form-check-input ms-0 mt-0" type="checkbox" id="enableTrailingStoploss" v-model="enableTrailingStoploss" />
-              <label class="form-check-label small mb-0" for="enableTrailingStoploss">Trailing stoploss</label>
-            </div>
-            <div class="form-check form-switch d-flex align-items-center gap-2 ps-0 mb-2"
-              title="On: this page watches prices and sends the exit (page must stay open). Off: the server does it.">
-              <input class="form-check-input ms-0 mt-0" type="checkbox" id="useUiTriggers" v-model="useUiTriggers" />
-              <label class="form-check-label small mb-0" for="useUiTriggers">Trigger from app (UI)</label>
-            </div>
           </div>
 
           <!-- Predefined Target -->
@@ -117,23 +108,6 @@
               <input type="number" class="form-control form-control-sm" style="min-width: 0; max-width: 70px;" id="targetValue"
                 aria-label="Predefined Target (points)" v-model="targetValue"
                 @wheel.prevent="(e) => handleFormInputMouseScroll(e, { type: 'target' })"
-                />
-              <span class="input-group-text">Points</span>
-            </div>
-          </div>
-
-          <!-- Target Trailing: each time the target is reached the stoploss moves to it and the target advances -->
-          <div class="col-6 col-md-4 col-lg-2 mt-md-1 mt-lg-2">
-            <label for="enableTargetTrail" class="form-label mb-0 small">Target Trailing</label>
-            <div class="input-group input-group-sm mb-3">
-              <div class="input-group-text">
-                <input class="form-check-input mt-0" type="checkbox" id="enableTargetTrail"
-                  aria-label="Enable Target Trailing" v-model="enableTargetTrail"
-                  title="Enables the predefined stop-loss and target too"
-                  :class="{ 'border-success bg-success': enableTargetTrail }" />
-              </div>
-              <input type="number" min="0" class="form-control form-control-sm" style="min-width: 0; max-width: 70px;" id="targetTrailValue"
-                aria-label="Target trail (points)" v-model="targetTrailValue"
                 />
               <span class="input-group-text">Points</span>
             </div>
@@ -501,9 +475,7 @@
 
               <p class="text-warning my-2" role="alert">
                 Stop-loss and target rules are virtual, not protective orders at the exchange.
-                {{ useUiTriggers
-                  ? 'App monitoring requires this page to remain open.'
-                  : 'Server monitoring does not require this page to remain open.' }}
+                Monitoring is managed by the server; leaving this page open is not required.
                 Monitoring or exits can fail if the monitor, market-data feed, network or broker is unavailable.
                 An exit order may not fill; verify the position with Flattrade.
               </p>
@@ -621,7 +593,7 @@ import PnlComponent from '@/components/PnlComponent.vue';
 // Global State
 import {
   selectedCallStrike, selectedPutStrike, selectedMasterSymbol, shoonyaPositionBook, flatTradePositionBook, selectedBroker, selectedBrokerName, selectedExchange, selectedProductType,
-  accountRefreshing, accountRefreshedAt, useUiTriggers, accountRefreshHandler, selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, enableTrailingStoploss, enableTargetTrail, targetTrailValue, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
+  accountRefreshing, accountRefreshedAt, accountRefreshHandler, selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
   currentTime,
   showLTPRangeBar,
   showOHLCValues,
@@ -671,7 +643,6 @@ import { closeAllPositions, cancelPendingOrders, closeSelectedPositions, closePo
 
 // Risk Management Composables
 import { checkStoplossesAndTargets, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget, setStoplossPrice, setTargetPrice, toggleTargetTrail, syncRiskRules } from '@/composables/useRiskManagement'
-import { checkUiTriggers } from '@/composables/useUiRiskTriggers'
 
 // Keyboard Shortcuts Composables
 import { handleHotKeys } from '@/composables/useKeyboardShortcuts'
@@ -736,9 +707,7 @@ const staleDismissed = ref(false);
 const lotsText = '1 to 10 contract lots';
 const serverManagedNotice = computed(() =>
   `Server-managed orders place live NSE/BSE index derivatives trades (${lotsText} each). `
-  + (useUiTriggers.value
-    ? 'Virtual stop-loss, target and trailing rules require this page to remain open. '
-    : 'Virtual stop-loss, target and trailing rules are monitored by the server, not the exchange. ')
+  + 'Virtual stop-loss and target rules are monitored by the server, not the exchange. '
   + 'If protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured. '
   + 'Triggered exits place live limit orders. Verify fills with Flattrade.')
 const streamNotice = computed(() =>
@@ -894,7 +863,6 @@ onMounted(async () => {
   await syncRiskRules();
   positionCheckInterval = setInterval(() => {
     checkStoplossesAndTargets();
-    checkUiTriggers();
   }, 1000);
   positionRefreshInterval = setInterval(refreshFlattradePositions, 60_000);
   accountRefreshInterval = setInterval(refreshAccount, 5000);
