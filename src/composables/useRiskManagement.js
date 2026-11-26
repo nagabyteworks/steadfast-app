@@ -1,3 +1,4 @@
+import { watch } from 'vue'
 import { usesServerManagedAccount } from '@/config/profile'
 import {
   stoplossValue,
@@ -12,7 +13,7 @@ import {
   targets,
   trailingStoplosses,
   riskRules,
-  riskDryRun,
+  useUiTriggers,
   flatTradePositionBook,
   shoonyaPositionBook,
   toastMessage,
@@ -40,7 +41,10 @@ const armedRule = (tsym) => {
   const rule = riskRules.value[tsym]
   return rule?.status === 'armed' ? rule : null
 }
+export const currentMonitor = () => (useUiTriggers.value ? 'ui' : 'server')
 const round = (value) => Number(value.toFixed(2))
+
+export const getArmedRule = armedRule
 
 export const syncRiskMirrors = () => {
   const stop = {}
@@ -74,7 +78,6 @@ export const syncRiskRules = async () => {
   try {
     const data = await fetchRiskRules()
     if (pendingSaves > 0) return
-    riskDryRun.value = data.dryRun !== false
     const next = {}
     for (const rule of data.rules) {
       next[rule.tsym] = rule
@@ -102,13 +105,13 @@ const enqueue = (request) => {
     })
 }
 
-const keepSaved = (rule) => {
+export const keepSaved = (rule) => {
   riskRules.value = { ...riskRules.value, [rule.tsym]: rule }
   syncRiskMirrors()
 }
 
 // Applies a change optimistically, then saves it on the server in order.
-const updateRule = (position, fields, deltas = {}) => {
+export const updateRule = (position, fields, deltas = {}) => {
   if (!usesServerManagedAccount) {
     notify('Server-side stop-loss and target need the server-managed Flattrade account.')
     return false
@@ -124,6 +127,7 @@ const updateRule = (position, fields, deltas = {}) => {
         side: Number(position.netqty ?? position.netQty) > 0 ? 'long' : 'short',
         entry: parseFloat(position.netavgprc ?? position.netAvgPrice),
         mode: 'static',
+        monitor: currentMonitor(),
         slPrice: null,
         slPoints: null,
         targetPrice: null,
@@ -137,6 +141,7 @@ const updateRule = (position, fields, deltas = {}) => {
   if (deltas.slDelta && next.slPrice != null) next.slPrice = round(next.slPrice + deltas.slDelta)
   if (deltas.targetDelta && next.targetPrice != null) next.targetPrice = round(next.targetPrice + deltas.targetDelta)
 
+  console.log(`[risk] ${existing ? 'update' : 'create'} ${tsym}`, { fields, deltas, monitor: next.monitor })
   keepSaved(next)
   if (existing) {
     enqueue(async () => keepSaved({ ...next, ...(await patchRiskRule(tsym, { ...fields, ...deltas })) }))
@@ -147,7 +152,8 @@ const updateRule = (position, fields, deltas = {}) => {
   return true
 }
 
-const dropRule = (tsym) => {
+export const dropRule = (tsym) => {
+  console.log(`[risk] removing rule ${tsym}`)
   const { [tsym]: _removed, ...rest } = riskRules.value
   riskRules.value = rest
   syncRiskMirrors()
@@ -327,3 +333,15 @@ export const checkStoplossesAndTargets = () => {
     if (armed) pendingDefaultProtection.delete(tsym)
   }
 }
+
+// Hands every armed rule to whoever is now responsible for watching it.
+watch(useUiTriggers, (ui) => {
+  const monitor = ui ? 'ui' : 'server'
+  console.log(`[risk] trigger source switched to ${ui ? 'UI (this page)' : 'server (WebSocket service)'}`)
+  if (!usesServerManagedAccount) return
+  for (const rule of Object.values(riskRules.value)) {
+    if (rule.status !== 'armed' || rule.monitor === monitor) continue
+    keepSaved({ ...rule, monitor })
+    enqueue(async () => keepSaved({ ...rule, ...(await patchRiskRule(rule.tsym, { monitor })) }))
+  }
+})

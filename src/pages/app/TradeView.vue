@@ -98,6 +98,11 @@
               <input class="form-check-input ms-0 mt-0" type="checkbox" id="enableTrailingStoploss" v-model="enableTrailingStoploss" />
               <label class="form-check-label small mb-0" for="enableTrailingStoploss">Trailing stoploss</label>
             </div>
+            <div class="form-check form-switch d-flex align-items-center gap-2 ps-0 mb-2"
+              title="On: this page watches prices and sends the exit (page must stay open). Off: the server does it.">
+              <input class="form-check-input ms-0 mt-0" type="checkbox" id="useUiTriggers" v-model="useUiTriggers" />
+              <label class="form-check-label small mb-0" for="useUiTriggers">Trigger from app (UI)</label>
+            </div>
           </div>
 
           <!-- Predefined Target -->
@@ -123,12 +128,12 @@
             <div class="input-group input-group-sm mb-3">
               <div class="input-group-text">
                 <input class="form-check-input mt-0" type="checkbox" id="enableTargetTrail"
-                  aria-label="Enable Target Trailing" v-model="enableTargetTrail" :disabled="!enableTarget"
-                  title="Enable Predefined Target first"
+                  aria-label="Enable Target Trailing" v-model="enableTargetTrail"
+                  title="Enables the predefined stop-loss and target too"
                   :class="{ 'border-success bg-success': enableTargetTrail }" />
               </div>
               <input type="number" min="0" class="form-control form-control-sm" style="min-width: 0; max-width: 70px;" id="targetTrailValue"
-                aria-label="Target trail (points)" v-model="targetTrailValue" :disabled="!enableTarget"
+                aria-label="Target trail (points)" v-model="targetTrailValue"
                 />
               <span class="input-group-text">Points</span>
             </div>
@@ -613,7 +618,7 @@ import PnlComponent from '@/components/PnlComponent.vue';
 // Global State
 import {
   selectedCallStrike, selectedPutStrike, selectedMasterSymbol, shoonyaPositionBook, flatTradePositionBook, selectedBroker, selectedBrokerName, selectedExchange, selectedProductType,
-  accountRefreshing, accountRefreshedAt, accountRefreshHandler, selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, enableTrailingStoploss, enableTargetTrail, targetTrailValue, riskDryRun, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
+  accountRefreshing, accountRefreshedAt, useUiTriggers, accountRefreshHandler, selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, enableTrailingStoploss, enableTargetTrail, targetTrailValue, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
   currentTime,
   showLTPRangeBar,
   showOHLCValues,
@@ -663,6 +668,7 @@ import { closeAllPositions, cancelPendingOrders, closeSelectedPositions, closePo
 
 // Risk Management Composables
 import { checkStoplossesAndTargets, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget, setStoplossPrice, setTargetPrice, toggleTargetTrail, syncRiskRules } from '@/composables/useRiskManagement'
+import { checkUiTriggers } from '@/composables/useUiRiskTriggers'
 
 // Keyboard Shortcuts Composables
 import { handleHotKeys } from '@/composables/useKeyboardShortcuts'
@@ -729,9 +735,7 @@ const serverManagedNotice = computed(() =>
   `Server-managed orders place live NSE/BSE index derivatives trades (${lotsText} each). `
   + 'Stop-loss, target and trailing rules are monitored by the server, so they keep working when this page is closed. '
   + 'If protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured. '
-  + (riskDryRun.value
-    ? 'DRY RUN: triggered exits are only logged on the server and no exit order is sent.'
-    : 'Triggered exits place live limit orders. Verify fills with Flattrade.'))
+  + 'Triggered exits place live limit orders. Verify fills with Flattrade.')
 const streamNotice = computed(() =>
   selectedBroker.value?.brokerName === 'Flattrade'
   && (!brokerStreamHealth.value.authenticated || wsConnectionState.value !== 'connected' || marketDataStale.value)
@@ -883,7 +887,10 @@ onMounted(async () => {
     updateStrikesForExpiry(selectedExpiry.value, true);
   }
   await syncRiskRules();
-  positionCheckInterval = setInterval(checkStoplossesAndTargets, 1000);
+  positionCheckInterval = setInterval(() => {
+    checkStoplossesAndTargets();
+    checkUiTriggers();
+  }, 1000);
   positionRefreshInterval = setInterval(refreshFlattradePositions, 60_000);
   accountRefreshInterval = setInterval(refreshAccount, 5000);
   accountRefreshHandler.value = refreshAccount;

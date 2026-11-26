@@ -390,8 +390,8 @@ export const placeOrderForPosition = async (transactionType, optionType, positio
 export const closePosition = async (position) => {
   const netqty = Number(position.netqty)
   if (!netqty) return
-  if (!window.confirm(`Exit ${getSymbol(position)} (${Math.abs(netqty)} qty)?`)) return
-  await placeOrderForPosition(netqty > 0 ? 'S' : 'B', position.tsym.includes('C') ? 'CALL' : 'PUT', position)
+  console.log(`[exit] closing ${position.tsym} qty=${netqty}`)
+  return placeOrderForPosition(netqty > 0 ? 'S' : 'B', position.tsym.includes('C') ? 'CALL' : 'PUT', position)
 }
 export const closeAllPositions = async () => {
   try {

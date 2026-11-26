@@ -31,7 +31,10 @@
                                     @change="$emit('update:selectedPositionsSet', handleCheckboxChange($event, position.tsym))" />
                             </label>
                         </td>
-                        <td>{{ formatTradingSymbol(position.tsym) }}</td>
+                        <td>
+                            {{ formatTradingSymbol(position.tsym) }}
+                            <div v-if="ruleOutcomes[position.tsym]" class="small text-warning">{{ ruleOutcomes[position.tsym] }}</div>
+                        </td>
                         <td :class="[
                             position.netqty > 0 ? 'text-success' :
                                 position.netqty < 0 ? 'text-danger' :
@@ -183,6 +186,7 @@
                         </span>
                     </div>
                 </div>
+                <div v-if="ruleOutcomes[position.tsym]" class="small text-warning mb-2">{{ ruleOutcomes[position.tsym] }}</div>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div>
                         <small>Qty: {{ position.netqty }}</small>
@@ -313,6 +317,11 @@ import { formatTradingSymbol, formatPrice } from '@/composables/useFormatters';
 import { positionLTPs, positionPercentChanges, stoplosses, targets, trailingStoplosses, riskRules } from '@/stores/globalStore'
 import EditableRiskValue from './EditableRiskValue.vue'
 
+// Last result of a rule that already fired (or failed), so a missing SL/target is explained
+const ruleOutcomes = computed(() =>
+    Object.fromEntries(Object.entries(riskRules.value)
+        .filter(([, rule]) => rule.status !== 'armed' && rule.message)
+        .map(([tsym, rule]) => [tsym, rule.message])))
 const targetTrailing = computed(() =>
     Object.fromEntries(Object.entries(riskRules.value).map(([tsym, rule]) => [tsym, rule.status === 'armed' && rule.mode === 'target_trail'])))
 

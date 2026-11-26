@@ -130,19 +130,22 @@ export const stoplosses = useLocalStorage('stoplosses', {})
 export const targets = useLocalStorage('targets', {})
 export const trailingStoplosses = useLocalStorage('trailingStoplosses', {})
 
-export const enableStoploss = useLocalStorage('enableStoploss', false)
+export const enableStoploss = useLocalStorage('enableStoploss', true)
 export const stoplossValue = useLocalStorage('stoplossValue', 20)
-export const enableTarget = useLocalStorage('enableTarget', false)
+export const enableTarget = useLocalStorage('enableTarget', true)
 export const targetValue = useLocalStorage('targetValue', 20)
 export const enableTrailingStoploss = useLocalStorage('enableTrailingStoploss', false)
-export const enableTargetTrail = useLocalStorage('enableTargetTrail', false)
+export const enableTargetTrail = useLocalStorage('enableTargetTrail', true)
 export const targetTrailValue = useLocalStorage('targetTrailValue', 10)
-// Server-side stop-loss/target rules keyed by trading symbol, and whether exits are dry-run only.
+// true: this app watches the price and sends the exit (works only while the page is open);
+// false: the server (WebSocket service) watches and exits, even when the page is closed.
+export const useUiTriggers = useLocalStorage('useUiTriggers', false)
+// Server-side stop-loss/target rules keyed by trading symbol.
 export const riskRules = ref({})
-export const riskDryRun = ref(true)
 
-// Trailing stop-loss and target trailing are alternatives; each needs its base setting enabled.
-// Target trailing additionally requires the predefined target to stay enabled.
+// Trailing stop-loss and target trailing are alternatives. Target trailing needs both the
+// predefined stop-loss and target, so enabling it switches them on and disabling either
+// of them switches target trailing off.
 watch(enableTrailingStoploss, (enabled) => {
   if (enabled) {
     enableTargetTrail.value = false
@@ -151,13 +154,14 @@ watch(enableTrailingStoploss, (enabled) => {
 })
 watch(enableTargetTrail, (enabled) => {
   if (!enabled) return
-  if (!enableTarget.value) {
-    enableTargetTrail.value = false
-    return
-  }
+  enableStoploss.value = true
+  enableTarget.value = true
   enableTrailingStoploss.value = false
 })
 watch(enableTarget, (enabled) => {
+  if (!enabled) enableTargetTrail.value = false
+})
+watch(enableStoploss, (enabled) => {
   if (!enabled) enableTargetTrail.value = false
 })
 
