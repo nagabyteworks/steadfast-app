@@ -142,6 +142,8 @@ export const targetTrailValue = useLocalStorage('targetTrailValue', 10)
 export const useUiTriggers = useLocalStorage('useUiTriggers', false)
 // Server-side stop-loss/target rules keyed by trading symbol.
 export const riskRules = ref({})
+export const reconciliationRequired = ref({})
+export const riskSyncAvailable = ref(false)
 
 // Trailing stop-loss and target trailing are alternatives. Target trailing needs both the
 // predefined stop-loss and target, so enabling it switches them on and disabling either

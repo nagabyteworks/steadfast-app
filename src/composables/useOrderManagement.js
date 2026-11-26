@@ -18,6 +18,7 @@ import {
   toastMessage,
   showToast,
   flatTradePositionBook,
+  flattradePositionsStale,
   shoonyaPositionBook,
   flatOrderBook,
   shoonyaOrderBook,
@@ -55,8 +56,7 @@ import {
 // Risk Management Composables
 import {
   scheduleDefaultProtection,
-  setStoploss,
-  setTarget
+  checkStoplossesAndTargets
 } from '@/composables/useRiskManagement'
 
 const getCurrentLTP = (optionType) => {
@@ -145,6 +145,7 @@ export const placeOrder = async (transactionType, drvOptionType) => {
     }
 
     const exchangeSegment = getExchangeSegment()
+    const previousPositionStale = selectedBroker.value?.brokerName === 'Flattrade' && flattradePositionsStale.value
     if (usesServerManagedAccount && !['NFO', 'BFO'].includes(exchangeSegment)) {
       throw new Error('Server-managed live orders are limited to NSE and BSE index derivatives')
     }
@@ -252,27 +253,18 @@ export const placeOrder = async (transactionType, drvOptionType) => {
 
     // Find the new position after updating positions
     const newPosition = findNewPosition(selectedStrike.tradingSymbol)
+    if (selectedBroker.value?.brokerName === 'Flattrade' &&
+        (previousPositionStale || flattradePositionsStale.value)) {
+      toastMessage.value = 'Order submitted, but position data is stale. Verify the position and its stop-loss/target with Flattrade.'
+      showToast.value = true
+      await updateFundLimits()
+      return
+    }
     scheduleDefaultProtection(selectedStrike.tradingSymbol)
-    let protectionArmed = !((enableStoploss.value || enableTarget.value) && !newPosition)
+    const protectionArmed = await checkStoplossesAndTargets()
 
-    // If predefined stoploss is enabled, set stoploss for the new position
-    if (enableStoploss.value && stoplossValue.value > 0 && newPosition) {
-      protectionArmed = setStoploss(newPosition, 'static') && protectionArmed
-    } else if (enableStoploss.value && newPosition) {
-      protectionArmed = false
-    }
-
-    // If predefined target is enabled, set target for the new position
-    if (enableTarget.value && targetValue.value > 0 && newPosition) {
-      protectionArmed = setTarget(newPosition) && protectionArmed
-    } else if (enableTarget.value && newPosition) {
-      protectionArmed = false
-    }
-
-    if (!protectionArmed) {
-      toastMessage.value = newPosition
-        ? 'Order accepted, but server-side stop-loss/target automation was not armed. Verify the position with Flattrade.'
-        : 'Order accepted; waiting for the Flattrade position before server-side stop-loss/target automation can arm.'
+    if (!protectionArmed && (!newPosition || !Number(newPosition.netqty ?? newPosition.netQty))) {
+      toastMessage.value = 'Order accepted; waiting for the Flattrade position before server-side stop-loss/target automation can arm.'
       showToast.value = true
     }
 

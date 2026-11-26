@@ -499,10 +499,13 @@
                 @remove-target="removeTarget" @increase-target="increaseTarget" @decrease-target="decreaseTarget"
                 @edit-stoploss="setStoplossPrice" @edit-target="setTargetPrice" @toggle-target-trail="toggleTargetTrail" @exit-position="closePosition" />
 
-              <p class="text-secondary my-2">
-                Stop-losses, trailing stop-losses, targets and target trails are stored and monitored by the server
-                (not by the exchange). They keep working if you close this window, but not if the server or its
-                market-data feed is down.
+              <p class="text-warning my-2" role="alert">
+                Stop-loss and target rules are virtual, not protective orders at the exchange.
+                {{ useUiTriggers
+                  ? 'App monitoring requires this page to remain open.'
+                  : 'Server monitoring does not require this page to remain open.' }}
+                Monitoring or exits can fail if the monitor, market-data feed, network or broker is unavailable.
+                An exit order may not fill; verify the position with Flattrade.
               </p>
             </div>
 
@@ -733,7 +736,9 @@ const staleDismissed = ref(false);
 const lotsText = '1 to 10 contract lots';
 const serverManagedNotice = computed(() =>
   `Server-managed orders place live NSE/BSE index derivatives trades (${lotsText} each). `
-  + 'Stop-loss, target and trailing rules are monitored by the server, so they keep working when this page is closed. '
+  + (useUiTriggers.value
+    ? 'Virtual stop-loss, target and trailing rules require this page to remain open. '
+    : 'Virtual stop-loss, target and trailing rules are monitored by the server, not the exchange. ')
   + 'If protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured. '
   + 'Triggered exits place live limit orders. Verify fills with Flattrade.')
 const streamNotice = computed(() =>

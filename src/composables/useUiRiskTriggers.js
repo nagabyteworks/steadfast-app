@@ -1,7 +1,7 @@
 import { watch } from 'vue'
-import { positionLTPs, riskRules, flatTradePositionBook, shoonyaPositionBook, toastMessage, showToast } from '@/stores/globalStore'
-import { getArmedRule, updateRule, dropRule } from '@/composables/useRiskManagement'
-import { closePosition } from '@/composables/useOrderManagement'
+import { positionLTPs, riskRules, reconciliationRequired, flatTradePositionBook, shoonyaPositionBook, toastMessage, showToast } from '@/stores/globalStore'
+import { getArmedRule, updateRule, dropRule, syncRiskRules } from '@/composables/useRiskManagement'
+import { triggerUiRiskRule } from '@/api/riskRules'
 
 // UI-side stop-loss/target watcher. It only handles rules whose monitor is "ui" (the "Trigger from
 // app" toggle); rules with monitor "server" are watched by the WebSocket service. The price logic
@@ -27,9 +27,16 @@ export const evaluateRule = (rule, ltp) => {
       changed = true
     }
   } else if (rule.mode === 'target_trail') {
+    if (!Number.isFinite(rule.trailPoints) || rule.trailPoints <= 0) {
+      throw new RangeError('Invalid target trailing points')
+    }
     while (targetPrice != null && sign * (ltp - targetPrice) >= 0) {
+      const nextTarget = round(targetPrice + sign * rule.trailPoints)
+      if (!Number.isFinite(nextTarget) || nextTarget <= 0 || sign * (nextTarget - targetPrice) <= 0) {
+        throw new RangeError('Invalid next target price')
+      }
       slPrice = targetPrice
-      targetPrice = round(targetPrice + sign * rule.trailPoints)
+      targetPrice = nextTarget
       changed = true
     }
     return { changed, reason: null, slPrice, targetPrice }
@@ -46,33 +53,31 @@ const notify = (message) => {
   showToast.value = true
 }
 
-const exitPosition = async (position, rule, reason, ltp) => {
+const exitPosition = async (rule, reason, ltp) => {
   const tsym = rule.tsym
   exiting.add(tsym)
   console.log(`[ui-risk] ${reason} hit for ${tsym} at ${ltp}; sending exit`, { sl: rule.slPrice, target: rule.targetPrice })
-  let acknowledged = false
   try {
-    acknowledged = await closePosition(position)
+    const result = await triggerUiRiskRule(tsym, reason, ltp, rule.rev)
+    if (result.handled && result.status === 'done') {
+      notify(`${tsym}: ${reason} hit at ${ltp}, exit order sent; verify execution with Flattrade`)
+    } else {
+      notify(`${tsym}: automatic exit was not confirmed; verify the position and protection with Flattrade`)
+    }
   } catch (error) {
     console.error(`[ui-risk] exit for ${tsym} threw`, error)
+    notify(`${tsym}: exit failed or is uncertain; verify with Flattrade`)
+  } finally {
+    await syncRiskRules()
+    exiting.delete(tsym)
   }
-  // The rule is consumed either way; an unacknowledged exit is never retried automatically.
-  dropRule(tsym)
-  if (acknowledged) {
-    console.log(`[ui-risk] exit order accepted for ${tsym}`)
-    notify(`${tsym}: ${reason} hit at ${ltp}, exit order sent`)
-  } else {
-    console.error(`[ui-risk] exit order for ${tsym} was not acknowledged`)
-    notify(`${tsym}: ${reason} hit at ${ltp} but the exit failed or is uncertain; verify with Flattrade`)
-  }
-  exiting.delete(tsym)
 }
 
 // Called every second. Moves trailing levels and exits positions whose stop-loss or target was hit.
 export const checkUiTriggers = () => {
   const positions = [...flatTradePositionBook.value, ...shoonyaPositionBook.value]
   for (const rule of Object.values(riskRules.value)) {
-    if (rule.monitor !== 'ui' || rule.status !== 'armed' || exiting.has(rule.tsym)) continue
+    if (rule.monitor !== 'ui' || rule.status !== 'armed' || reconciliationRequired.value[rule.tsym] || exiting.has(rule.tsym)) continue
     const position = positions.find((item) => item.tsym === rule.tsym)
     if (!position) continue
     if (!Number(position.netqty)) {
@@ -83,9 +88,17 @@ export const checkUiTriggers = () => {
     const ltp = parseFloat(positionLTPs.value[rule.tsym])
     if (!Number.isFinite(ltp) || ltp <= 0) continue
 
-    const result = evaluateRule(rule, ltp)
+    let result
+    try {
+      result = evaluateRule(rule, ltp)
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error
+      console.error(`[ui-risk] ${rule.tsym}: ${error.message}`)
+      notify(`${rule.tsym}: ${error.message}; verify the target trailing configuration`)
+      continue
+    }
     if (result.reason) {
-      exitPosition(position, rule, result.reason, ltp)
+      exitPosition(rule, result.reason, ltp)
     } else if (result.changed) {
       console.log(`[ui-risk] trailing ${rule.tsym} at ${ltp}: sl ${rule.slPrice} -> ${result.slPrice}, target ${rule.targetPrice} -> ${result.targetPrice}`)
       if (getArmedRule(rule.tsym)) {

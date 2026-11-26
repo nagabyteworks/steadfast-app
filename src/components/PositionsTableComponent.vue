@@ -33,6 +33,13 @@
                         </td>
                         <td>
                             {{ formatTradingSymbol(position.tsym) }}
+                            <div v-if="!reconciliationRequired[position.tsym]" class="small"
+                                :class="protectionStatus(position) === 'PROTECTED' ? 'text-success' : 'text-warning'">
+                                {{ protectionStatus(position) }}
+                            </div>
+                            <ReconciliationNotice v-if="reconciliationRequired[position.tsym]"
+                                :message="reconciliationRequired[position.tsym].message"
+                                :updated-at="reconciliationRequired[position.tsym].updatedAt" :is-open="Number(position.netqty) !== 0" />
                             <div v-if="ruleOutcomes[position.tsym]" class="small text-warning">{{ ruleOutcomes[position.tsym] }}</div>
                         </td>
                         <td :class="[
@@ -186,6 +193,12 @@
                         </span>
                     </div>
                 </div>
+                <ReconciliationNotice v-if="reconciliationRequired[position.tsym]"
+                    :message="reconciliationRequired[position.tsym].message"
+                    :updated-at="reconciliationRequired[position.tsym].updatedAt" :is-open="Number(position.netqty) !== 0" class="mb-2" />
+                <div v-else class="small mb-2" :class="protectionStatus(position) === 'PROTECTED' ? 'text-success' : 'text-warning'">
+                    {{ protectionStatus(position) }}
+                </div>
                 <div v-if="ruleOutcomes[position.tsym]" class="small text-warning mb-2">{{ ruleOutcomes[position.tsym] }}</div>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div>
@@ -314,8 +327,16 @@ const emit = defineEmits([
 import { formatTradingSymbol, formatPrice } from '@/composables/useFormatters';
 
 // Global State
-import { positionLTPs, positionPercentChanges, stoplosses, targets, trailingStoplosses, riskRules } from '@/stores/globalStore'
+import { positionLTPs, positionPercentChanges, stoplosses, targets, trailingStoplosses, riskRules, reconciliationRequired, riskSyncAvailable } from '@/stores/globalStore'
 import EditableRiskValue from './EditableRiskValue.vue'
+import ReconciliationNotice from './ReconciliationNotice.vue'
+
+const protectionStatus = (position) => {
+    const rule = riskRules.value[position.tsym]
+    if (reconciliationRequired.value[position.tsym] || rule?.status === 'reconciliation_required') return 'RECONCILIATION_REQUIRED'
+    if (rule?.status === 'reconciliation_in_progress') return 'RECONCILIATION_IN_PROGRESS'
+    return riskSyncAvailable.value && Number(position.netqty) !== 0 && rule?.status === 'armed' ? 'PROTECTED' : 'UNPROTECTED'
+}
 
 // Last result of a rule that already fired (or failed), so a missing SL/target is explained
 const ruleOutcomes = computed(() =>

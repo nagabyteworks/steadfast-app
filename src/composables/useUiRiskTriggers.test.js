@@ -1,39 +1,56 @@
 import { nextTick } from 'vue'
-import { afterEach, describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 
 vi.hoisted(() => {
   vi.stubGlobal('localStorage', jsdom.window.localStorage)
 })
 vi.mock('@/config/profile', () => ({ usesServerManagedAccount: true }))
 vi.mock('@/api/riskRules', () => ({
-  fetchRiskRules: vi.fn(), createRiskRule: vi.fn(), patchRiskRule: vi.fn(), deleteRiskRule: vi.fn()
+  fetchRiskRules: vi.fn(), createRiskRule: vi.fn(), patchRiskRule: vi.fn(), deleteRiskRule: vi.fn(),
+  triggerUiRiskRule: vi.fn()
 }))
-vi.mock('@/composables/useOrderManagement', () => ({ closePosition: vi.fn() }))
 import { checkUiTriggers, evaluateRule } from '@/composables/useUiRiskTriggers'
-import { closePosition } from '@/composables/useOrderManagement'
+import { triggerUiRiskRule, fetchRiskRules } from '@/api/riskRules'
 import {
   enableStoploss,
   enableTarget,
   enableTargetTrail,
   flatTradePositionBook,
   positionLTPs,
+  reconciliationRequired,
   riskRules,
-  shoonyaPositionBook
+  shoonyaPositionBook,
+  toastMessage
 } from '@/stores/globalStore'
 
 const rule = (overrides = {}) => ({
-  side: 'long', mode: 'static', slPrice: 90, slPoints: 10, targetPrice: 120, trailPoints: 5, ...overrides
+  side: 'long', mode: 'static', rev: 1, slPrice: 90, slPoints: 10, targetPrice: 120, trailPoints: 5, ...overrides
 })
 
+beforeEach(() => {
+  fetchRiskRules.mockResolvedValue({ rules: [], reconciliation: [] })
+  triggerUiRiskRule.mockResolvedValue({ handled: true, status: 'done' })
+})
 afterEach(() => {
   flatTradePositionBook.value = []
   shoonyaPositionBook.value = []
   positionLTPs.value = {}
   riskRules.value = {}
-  closePosition.mockReset()
+  reconciliationRequired.value = {}
+  triggerUiRiskRule.mockReset()
+  fetchRiskRules.mockReset()
 })
 
 describe('evaluateRule', () => {
+  it.each([80, 130])('never sends a crossed trigger at %s for a flagged position', (ltp) => {
+    flatTradePositionBook.value = [{ tsym: 'FLAGGED', netqty: '1' }]
+    positionLTPs.value = { FLAGGED: ltp }
+    reconciliationRequired.value = { FLAGGED: { status: 'RECONCILIATION_REQUIRED' } }
+    riskRules.value = { FLAGGED: rule({ tsym: 'FLAGGED', status: 'armed', monitor: 'ui' }) }
+    checkUiTriggers()
+    expect(triggerUiRiskRule).not.toHaveBeenCalled()
+  })
+
   it('exits on stop-loss and target for longs', () => {
     expect(evaluateRule(rule(), 90).reason).toBe('Stop-loss')
     expect(evaluateRule(rule(), 120).reason).toBe('Target')
@@ -82,9 +99,26 @@ describe('evaluateRule', () => {
     expect(evaluateRule({ ...trailing, slPrice: gap.slPrice, targetPrice: gap.targetPrice }, 180).reason).toBe('Stop-loss')
   })
 
+  it('rejects a short target progression that would produce a zero price', () => {
+    const short = rule({ side: 'short', mode: 'target_trail', slPrice: 110, targetPrice: 50, trailPoints: 50 })
+    expect(() => evaluateRule(short, 50)).toThrow('Invalid next target price')
+    expect(short).toMatchObject({ slPrice: 110, targetPrice: 50 })
+  })
+
+  it('alerts when a trailing target cannot progress without changing the saved levels', () => {
+    flatTradePositionBook.value = [{ tsym: 'SHORT', netqty: '-1' }]
+    positionLTPs.value = { SHORT: 50 }
+    riskRules.value = {
+      SHORT: rule({ tsym: 'SHORT', status: 'armed', monitor: 'ui', side: 'short', mode: 'target_trail', slPrice: 110, targetPrice: 50, trailPoints: 50 })
+    }
+    checkUiTriggers()
+    expect(riskRules.value.SHORT).toMatchObject({ slPrice: 110, targetPrice: 50 })
+    expect(toastMessage.value).toMatch(/Invalid next target price/)
+    expect(triggerUiRiskRule).not.toHaveBeenCalled()
+  })
+
   it('immediately triggers an edited target already crossed by the current LTP', async () => {
     const position = { tsym: 'NIFTYCE', netqty: 1 }
-    closePosition.mockResolvedValue(true)
     flatTradePositionBook.value = [position]
     positionLTPs.value = { NIFTYCE: 115 }
     riskRules.value = {
@@ -93,12 +127,11 @@ describe('evaluateRule', () => {
 
     await nextTick()
 
-    expect(closePosition).toHaveBeenCalledWith(position)
+    expect(triggerUiRiskRule).toHaveBeenCalledWith('NIFTYCE', 'Target', 115, 1)
   })
 
   it('immediately triggers an edited stop-loss already crossed by the current LTP', async () => {
     const position = { tsym: 'NIFTYCE2', netqty: 1 }
-    closePosition.mockResolvedValue(true)
     flatTradePositionBook.value = [position]
     positionLTPs.value = { NIFTYCE2: 115 }
     riskRules.value = {
@@ -107,26 +140,58 @@ describe('evaluateRule', () => {
 
     await nextTick()
 
-    expect(closePosition).toHaveBeenCalledWith(position)
+    expect(triggerUiRiskRule).toHaveBeenCalledWith('NIFTYCE2', 'Stop-loss', 115, 1)
   })
 
   it('handles a reopened position for the same symbol after an earlier exit', async () => {
     const position = { tsym: 'REOPENED', netqty: 1 }
     let finishExit
-    closePosition.mockImplementationOnce(() => new Promise((resolve) => { finishExit = resolve }))
-    closePosition.mockResolvedValueOnce(true)
+    triggerUiRiskRule.mockImplementationOnce(() => new Promise((resolve) => { finishExit = resolve }))
     flatTradePositionBook.value = [position]
     positionLTPs.value = { REOPENED: 120 }
     const armed = rule({ tsym: 'REOPENED', status: 'armed', monitor: 'ui' })
     riskRules.value = { REOPENED: armed }
     await nextTick()
     checkUiTriggers()
-    expect(closePosition).toHaveBeenCalledTimes(1)
+    expect(triggerUiRiskRule).toHaveBeenCalledTimes(1)
 
-    finishExit(true)
+    finishExit({ handled: true, status: 'done' })
     await vi.waitFor(() => expect(riskRules.value.REOPENED).toBeUndefined())
     riskRules.value = { REOPENED: { ...armed } }
-    await vi.waitFor(() => expect(closePosition).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(triggerUiRiskRule).toHaveBeenCalledTimes(2))
+  })
+
+  it('does not retry a failed exit and warns the user to verify it', async () => {
+    const position = { tsym: 'FAIL', netqty: 1 }
+    triggerUiRiskRule.mockResolvedValue({ handled: true, status: 'failed' })
+    flatTradePositionBook.value = [position]
+    positionLTPs.value = { FAIL: 90 }
+    riskRules.value = { FAIL: rule({ tsym: 'FAIL', status: 'armed', monitor: 'ui' }) }
+    await vi.waitFor(() => expect(riskRules.value.FAIL).toBeUndefined())
+    checkUiTriggers()
+    expect(triggerUiRiskRule).toHaveBeenCalledTimes(1)
+    expect(toastMessage.value).toMatch(/not confirmed/)
+  })
+
+  it('removes a flat UI position rule without placing an exit', () => {
+    flatTradePositionBook.value = [{ tsym: 'FLAT', netqty: '0' }]
+    riskRules.value = { FLAT: rule({ tsym: 'FLAT', status: 'armed', monitor: 'ui' }) }
+    checkUiTriggers()
+    expect(riskRules.value.FLAT).toBeUndefined()
+    expect(triggerUiRiskRule).not.toHaveBeenCalled()
+  })
+
+  it('persists a trailing stop and does not exit when the price is unavailable', () => {
+    const position = { tsym: 'TRAIL', netqty: 1 }
+    flatTradePositionBook.value = [position]
+    riskRules.value = { TRAIL: rule({ tsym: 'TRAIL', status: 'armed', monitor: 'ui', mode: 'trailing_sl', targetPrice: null }) }
+    positionLTPs.value = { TRAIL: 'invalid' }
+    checkUiTriggers()
+    expect(riskRules.value.TRAIL.slPrice).toBe(90)
+    positionLTPs.value = { TRAIL: 115 }
+    checkUiTriggers()
+    expect(riskRules.value.TRAIL.slPrice).toBe(105)
+    expect(triggerUiRiskRule).not.toHaveBeenCalled()
   })
 })
 

@@ -11,6 +11,7 @@ vi.hoisted(() => {
   vi.stubGlobal('localStorage', jsdom.window.localStorage)
 })
 beforeEach(() => {
+  vi.spyOn(axios, 'get').mockResolvedValue({ data: { orderBook: [], tradeBook: [] } })
   selectedBroker.value = { brokerName: 'Flattrade', clientId: 'test-user' }
   selectedMasterSymbol.value = 'NIFTY'
   selectedExchange.value = 'NFO'
