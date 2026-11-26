@@ -9,7 +9,7 @@ vi.mock('@/api/riskRules', () => ({
   fetchRiskRules: vi.fn(), createRiskRule: vi.fn(), patchRiskRule: vi.fn(), deleteRiskRule: vi.fn()
 }))
 vi.mock('@/composables/useOrderManagement', () => ({ closePosition: vi.fn() }))
-import { evaluateRule } from '@/composables/useUiRiskTriggers'
+import { checkUiTriggers, evaluateRule } from '@/composables/useUiRiskTriggers'
 import { closePosition } from '@/composables/useOrderManagement'
 import {
   enableStoploss,
@@ -57,6 +57,31 @@ describe('evaluateRule', () => {
     expect(result).toMatchObject({ changed: true, reason: null, slPrice: 125, targetPrice: 130 })
   })
 
+  it('checks both fixed thresholds around a 150 entry, including gaps', () => {
+    const fixed = rule({ slPrice: 140, targetPrice: 170 })
+    expect(evaluateRule(fixed, 140.01).reason).toBeNull()
+    expect(evaluateRule(fixed, 139).reason).toBe('Stop-loss')
+    expect(evaluateRule(fixed, 169.99).reason).toBeNull()
+    expect(evaluateRule(fixed, 171).reason).toBe('Target')
+  })
+
+  it('moves a trailing stop from a 150 entry only upward and exits on a reversal', () => {
+    let trailing = rule({ mode: 'trailing_sl', slPrice: 140, targetPrice: null })
+    const rising = evaluateRule(trailing, 165)
+    expect(rising).toMatchObject({ changed: true, reason: null, slPrice: 155 })
+    trailing = { ...trailing, slPrice: rising.slPrice }
+    expect(evaluateRule(trailing, 160)).toMatchObject({ changed: false, reason: null, slPrice: 155 })
+    expect(evaluateRule(trailing, 155).reason).toBe('Stop-loss')
+  })
+
+  it('advances a trailing target across multiple milestones and exits at the moved stop', () => {
+    const trailing = rule({ mode: 'target_trail', slPrice: 140, targetPrice: 170, trailPoints: 5 })
+    expect(evaluateRule(trailing, 169.99)).toMatchObject({ changed: false, reason: null, slPrice: 140, targetPrice: 170 })
+    const gap = evaluateRule(trailing, 181)
+    expect(gap).toMatchObject({ changed: true, reason: null, slPrice: 180, targetPrice: 185 })
+    expect(evaluateRule({ ...trailing, slPrice: gap.slPrice, targetPrice: gap.targetPrice }, 180).reason).toBe('Stop-loss')
+  })
+
   it('immediately triggers an edited target already crossed by the current LTP', async () => {
     const position = { tsym: 'NIFTYCE', netqty: 1 }
     closePosition.mockResolvedValue(true)
@@ -83,6 +108,25 @@ describe('evaluateRule', () => {
     await nextTick()
 
     expect(closePosition).toHaveBeenCalledWith(position)
+  })
+
+  it('handles a reopened position for the same symbol after an earlier exit', async () => {
+    const position = { tsym: 'REOPENED', netqty: 1 }
+    let finishExit
+    closePosition.mockImplementationOnce(() => new Promise((resolve) => { finishExit = resolve }))
+    closePosition.mockResolvedValueOnce(true)
+    flatTradePositionBook.value = [position]
+    positionLTPs.value = { REOPENED: 120 }
+    const armed = rule({ tsym: 'REOPENED', status: 'armed', monitor: 'ui' })
+    riskRules.value = { REOPENED: armed }
+    await nextTick()
+    checkUiTriggers()
+    expect(closePosition).toHaveBeenCalledTimes(1)
+
+    finishExit(true)
+    await vi.waitFor(() => expect(riskRules.value.REOPENED).toBeUndefined())
+    riskRules.value = { REOPENED: { ...armed } }
+    await vi.waitFor(() => expect(closePosition).toHaveBeenCalledTimes(2))
   })
 })
 

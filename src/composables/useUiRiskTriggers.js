@@ -65,6 +65,7 @@ const exitPosition = async (position, rule, reason, ltp) => {
     console.error(`[ui-risk] exit order for ${tsym} was not acknowledged`)
     notify(`${tsym}: ${reason} hit at ${ltp} but the exit failed or is uncertain; verify with Flattrade`)
   }
+  exiting.delete(tsym)
 }
 
 // Called every second. Moves trailing levels and exits positions whose stop-loss or target was hit.
