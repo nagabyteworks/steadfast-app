@@ -33,14 +33,6 @@
                         </td>
                         <td>
                             {{ formatTradingSymbol(position.tsym) }}
-                            <div v-if="!reconciliationRequired[position.tsym]" class="small"
-                                :class="protectionStatus(position) === 'PROTECTED' ? 'text-success' : 'text-warning'">
-                                {{ protectionStatus(position) }}
-                            </div>
-                            <ReconciliationNotice v-if="reconciliationRequired[position.tsym]"
-                                :message="reconciliationRequired[position.tsym].message"
-                                :updated-at="reconciliationRequired[position.tsym].updatedAt" :is-open="Number(position.netqty) !== 0" />
-                            <div v-if="ruleOutcomes[position.tsym]" class="small text-warning">{{ ruleOutcomes[position.tsym] }}</div>
                         </td>
                         <td :class="[
                             position.netqty > 0 ? 'text-success' :
@@ -193,13 +185,6 @@
                         </span>
                     </div>
                 </div>
-                <ReconciliationNotice v-if="reconciliationRequired[position.tsym]"
-                    :message="reconciliationRequired[position.tsym].message"
-                    :updated-at="reconciliationRequired[position.tsym].updatedAt" :is-open="Number(position.netqty) !== 0" class="mb-2" />
-                <div v-else class="small mb-2" :class="protectionStatus(position) === 'PROTECTED' ? 'text-success' : 'text-warning'">
-                    {{ protectionStatus(position) }}
-                </div>
-                <div v-if="ruleOutcomes[position.tsym]" class="small text-warning mb-2">{{ ruleOutcomes[position.tsym] }}</div>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div>
                         <small>Qty: {{ position.netqty }}</small>
@@ -289,7 +274,7 @@
 <script setup>
 const formatPercent = (value) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
 import { positionsWithCalculatedProfit } from '@/composables/usePnlCalculations';
-import { computed, watch } from 'vue';
+import { computed } from 'vue';
 
 const props = defineProps({
     selectedBroker: {
@@ -306,7 +291,7 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits([
+defineEmits([
     'update:selectedPositionsSet',
     'set-stoploss',
     'remove-stoploss',
@@ -327,23 +312,8 @@ const emit = defineEmits([
 import { formatTradingSymbol, formatPrice } from '@/composables/useFormatters';
 
 // Global State
-import { positionLTPs, positionPercentChanges, stoplosses, targets, trailingStoplosses, riskRules, reconciliationRequired, riskSyncAvailable } from '@/stores/globalStore'
+import { positionLTPs, positionPercentChanges, stoplosses, targets, trailingStoplosses, riskRules } from '@/stores/globalStore'
 import EditableRiskValue from './EditableRiskValue.vue'
-import ReconciliationNotice from './ReconciliationNotice.vue'
-
-const protectionStatus = (position) => {
-    const rule = riskRules.value[position.tsym]
-    if (reconciliationRequired.value[position.tsym] || rule?.status === 'reconciliation_required') return 'RECONCILIATION_REQUIRED'
-    if (rule?.status === 'reconciliation_in_progress') return 'RECONCILIATION_IN_PROGRESS'
-    if (['triggered', 'exit_pending', 'exit_partially_filled'].includes(rule?.status)) return 'EXITING'
-    return riskSyncAvailable.value && Number(position.netqty) !== 0 && rule?.status === 'armed' ? 'PROTECTED' : 'UNPROTECTED'
-}
-
-// Last result of a rule that already fired (or failed), so a missing SL/target is explained
-const ruleOutcomes = computed(() =>
-    Object.fromEntries(Object.entries(riskRules.value)
-        .filter(([, rule]) => rule.status !== 'armed' && rule.message)
-        .map(([tsym, rule]) => [tsym, rule.message])))
 const targetTrailing = computed(() =>
     Object.fromEntries(Object.entries(riskRules.value).map(([tsym, rule]) => [tsym, rule.status === 'armed' && rule.mode === 'target_trail'])))
 

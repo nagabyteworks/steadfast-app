@@ -51,6 +51,7 @@ import { createDefaultRiskRule, fetchRiskRules } from '@/api/riskRules'
 import { updateOrdersAndPositions } from '@/composables/usePositionManagement'
 import {
   enableStoploss, enableTarget,
+  enableTrailingStoploss, enableTargetTrail, targetTrailValue, useUiTriggers,
   flatTradeBook, flatTradePositionBook, flattradePositionsStale, latestCallLTP, lotsPerSymbol, positionLTPs,
   reconciliationRequired, riskRules, selectedBroker, selectedCallStrike, selectedExchange, selectedMasterSymbol,
   selectedOrderType, selectedProductType, showToast, stoplossValue, targetValue, toastMessage
@@ -65,9 +66,11 @@ const fill = (id, side, price, time) => ({
   trantype: side, flqty: '75', flprc: String(price), fltm: `26-11-2026 ${time}`
 })
 const modes = [
-  { name: 'fixed stop-loss', stop: true, target: false, expected: { mode: 'static', slPrice: 140, targetPrice: null } },
-  { name: 'fixed target', stop: false, target: true, expected: { mode: 'static', slPrice: null, targetPrice: 170 } },
-  { name: 'fixed stop-loss and target', stop: true, target: true, expected: { mode: 'static', slPrice: 140, targetPrice: 170 } }
+  { name: 'fixed stop-loss', stop: true, target: false, expected: { mode: 'static', slPrice: 140, targetPrice: null }, trailingStop: false, targetTrailing: false, trailPoints: null },
+  { name: 'fixed target', stop: false, target: true, expected: { mode: 'static', slPrice: null, targetPrice: 170 }, trailingStop: false, targetTrailing: false, trailPoints: null },
+  { name: 'fixed stop-loss and target', stop: true, target: true, expected: { mode: 'static', slPrice: 140, targetPrice: 170 }, trailingStop: false, targetTrailing: false, trailPoints: null },
+  { name: 'trailing stop-loss', stop: true, target: true, expected: { mode: 'trailing_sl', slPrice: 140, targetPrice: 170, slPoints: 10, trailPoints: null }, trailingStop: true, targetTrailing: false, trailPoints: null },
+  { name: 'target trailing', stop: true, target: true, expected: { mode: 'target_trail', slPrice: 140, targetPrice: 170, trailPoints: 5 }, trailingStop: false, targetTrailing: true, trailPoints: 5 }
 ]
 
 beforeEach(async () => {
@@ -82,6 +85,10 @@ beforeEach(async () => {
   lotsPerSymbol.value = { NIFTY: 1 }
   stoplossValue.value = 10
   targetValue.value = 20
+  targetTrailValue.value = 5
+  enableTrailingStoploss.value = false
+  enableTargetTrail.value = false
+  useUiTriggers.value = false
   flattradePositionsStale.value = false
   await nextTick()
   riskRules.value = {}
@@ -100,6 +107,8 @@ afterEach(() => {
 const configure = async (mode) => {
   enableStoploss.value = mode.stop
   enableTarget.value = mode.target
+  enableTrailingStoploss.value = mode.trailingStop
+  enableTargetTrail.value = mode.targetTrailing
   await nextTick()
 }
 
@@ -138,7 +147,7 @@ describe.each(modes)('default $name lifecycle', (mode) => {
 
     expect(riskRules.value[symbol]).toMatchObject({ entry: 150, ...mode.expected })
     expect(createDefaultRiskRule).toHaveBeenLastCalledWith(symbol, expect.objectContaining({
-      trailingStop: false, targetTrailing: false, trailPoints: null
+      trailingStop: mode.trailingStop, targetTrailing: mode.targetTrailing, trailPoints: mode.trailPoints
     }))
   })
 
@@ -168,6 +177,22 @@ describe.each(modes)('default $name lifecycle', (mode) => {
 
     expect(riskRules.value[symbol]).toMatchObject({ entry: 150, ...mode.expected })
   })
+})
+
+it('creates default protection using the selected UI monitor', async () => {
+  await configure(modes[2])
+  useUiTriggers.value = true
+  flatTradePositionBook.value = [position(0, 100)]
+  vi.mocked(updateOrdersAndPositions).mockImplementationOnce(async () => {
+    flatTradeBook.value = [fill('1', 'B', 150, '09:25:00')]
+    flatTradePositionBook.value = [position(75, 150)]
+  })
+  latestCallLTP.value = '155'
+  positionLTPs.value = { [symbol]: 155 }
+
+  await submitBuy()
+
+  expect(riskRules.value[symbol].monitor).toBe('ui')
 })
 
 it('does not create automatic protection when both toggles are disabled', async () => {

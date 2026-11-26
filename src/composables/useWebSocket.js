@@ -30,6 +30,7 @@ import {
   positionPercentChanges,
   positionSecurityIds,
   positionLTPs,
+  positionLTPUpdatedAt,
   masterOpenPrice,
   masterHighPrice,
   masterLowPrice,
@@ -342,6 +343,10 @@ export const updatePositionLTPs = (quoteData) => {
       positionLTPs.value = {
         ...positionLTPs.value,
         [positionTsym]: newPrice
+      }
+      positionLTPUpdatedAt.value = {
+        ...positionLTPUpdatedAt.value,
+        [positionTsym]: Date.now()
       }
       const percentChange = readPercentChange(quoteData)
       if (percentChange !== undefined) {

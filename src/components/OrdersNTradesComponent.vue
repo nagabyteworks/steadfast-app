@@ -18,7 +18,7 @@
                     <template v-for="item in combinedOrdersAndTrades" :key="item.norenordno">
                         <tr v-if="item.order.status !== 'COMPLETE'">
                             <td>Order</td>
-                            <td>{{ formatTranType(item.order.trantype) }}</td>
+                            <td :class="transactionSideClass(item.order.trantype)">{{ formatTranType(item.order.trantype) }}</td>
                             <td>
                                 {{ item.order.norenordno }}
                                 <br />
@@ -36,7 +36,7 @@
                         </tr>
                         <tr v-if="item.trade">
                             <td>Trade</td>
-                            <td>{{ formatTranType(item.trade.trantype) }}</td>
+                            <td :class="transactionSideClass(item.trade.trantype)">{{ formatTranType(item.trade.trantype) }}</td>
                             <td>
                                 {{ item.trade.norenordno }}
                                 <br />
@@ -68,7 +68,7 @@
                     <h6 class="mb-2">Order</h6>
                     <div class="d-flex justify-content-between mb-2">
                         <span>Side:</span>
-                        <strong>{{ formatTranType(item.order.trantype) }}</strong>
+                        <strong :class="transactionSideClass(item.order.trantype)">{{ formatTranType(item.order.trantype) }}</strong>
                     </div>
                     <div class="d-flex justify-content-between mb-2">
                         <span>Order No:</span>
@@ -106,7 +106,7 @@
                     <h6 class="mb-2">Trade</h6>
                     <div class="d-flex justify-content-between mb-2">
                         <span>Side:</span>
-                        <strong>{{ formatTranType(item.trade.trantype) }}</strong>
+                        <strong :class="transactionSideClass(item.trade.trantype)">{{ formatTranType(item.trade.trantype) }}</strong>
                     </div>
                     <div class="d-flex justify-content-between mb-2">
                         <span>Order No:</span>
@@ -148,7 +148,7 @@ import { defineProps } from 'vue';
 // Formatters
 import { formatTradingSymbol, formatTime } from '@/composables/useFormatters';
 
-const props = defineProps({
+defineProps({
     combinedOrdersAndTrades: {
         type: Array,
         required: true,
@@ -170,4 +170,6 @@ const formatTranType = (trantype) => {
             return trantype;
     }
 };
+const transactionSideClass = (trantype) =>
+    trantype === 'B' ? 'text-success' : trantype === 'S' ? 'text-danger' : '';
 </script>

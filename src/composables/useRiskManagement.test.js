@@ -16,7 +16,8 @@ import {
   targetTrailValue,
   targetValue,
   trailingStoplosses,
-  toastMessage
+  toastMessage,
+  useUiTriggers
 } from '@/stores/globalStore'
 
 vi.hoisted(() => {
@@ -34,7 +35,7 @@ import { createManualRiskRule, deleteRiskRule, fetchRiskRules, patchRiskRule } f
 import {
   decreaseStoploss, decreaseTarget, dropRule, increaseStoploss, increaseTarget,
   removeStoploss, removeTarget, setStoploss, setStoplossPrice, setTarget, setTargetPrice,
-  syncRiskMirrors, syncRiskRules, toggleTargetTrail, updateRule
+  currentMonitor, syncRiskMirrors, syncRiskRules, toggleTargetTrail, updateRule
 } from './useRiskManagement'
 
 const position = { tsym: 'NIFTYCE', exch: 'NFO', token: '123', netqty: '50', netavgprc: '100' }
@@ -45,6 +46,7 @@ beforeEach(() => {
   enableTarget.value = true
   enableTrailingStoploss.value = false
   enableTargetTrail.value = false
+  useUiTriggers.value = false
   stoplossValue.value = 10
   targetValue.value = 20
   targetTrailValue.value = 5
@@ -66,12 +68,26 @@ beforeEach(() => {
       : { ...existing, targetPrice: 100 + sign * settings.targetPoints,
           mode: settings.targetTrailing ? 'target_trail' : existing.mode, trailPoints: settings.trailPoints }
   })
+
 })
 
 const armed = (overrides = {}) => ({
   tsym: 'NIFTYCE', status: 'armed', instrument: 'NFO|123', side: 'long', entry: 100,
   monitor: 'server', mode: 'static', slPrice: 90, slPoints: 10, targetPrice: 120,
   trailPoints: null, ...overrides
+})
+
+it('switches armed rules between server and UI monitoring with the monitor toggle', async () => {
+  riskRules.value = { NIFTYCE: armed() }
+  useUiTriggers.value = true
+  await vi.waitFor(() => {
+    expect(currentMonitor()).toBe('ui')
+    expect(riskRules.value.NIFTYCE.monitor).toBe('ui')
+  })
+  expect(patchRiskRule).toHaveBeenCalledWith('NIFTYCE', { monitor: 'ui' })
+
+  useUiTriggers.value = false
+  await vi.waitFor(() => expect(riskRules.value.NIFTYCE.monitor).toBe('server'))
 })
 
 it('creates one server rule with stop-loss and target trailing from a new position', async () => {

@@ -113,6 +113,44 @@
             </div>
           </div>
 
+          <div class="col-6 col-md-4 col-lg-2 mt-md-1 mt-lg-2">
+            <label for="enableTrailingStoploss" class="form-label mb-0 small">Trailing Stoploss</label>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="enableTrailingStoploss"
+                v-model="enableTrailingStoploss" />
+              <label class="form-check-label small" for="enableTrailingStoploss">
+                {{ enableTrailingStoploss ? 'Enabled' : 'Disabled' }}
+              </label>
+            </div>
+          </div>
+
+          <div class="col-6 col-md-4 col-lg-2 mt-md-1 mt-lg-2">
+            <label for="enableTargetTrail" class="form-label mb-0 small">Target Trailing</label>
+            <div class="input-group input-group-sm mb-3">
+              <div class="input-group-text">
+                <input class="form-check-input mt-0" type="checkbox" id="enableTargetTrail"
+                  aria-label="Enable Target Trailing" v-model="enableTargetTrail" />
+              </div>
+              <input type="number" class="form-control form-control-sm" style="min-width: 0; max-width: 70px;"
+                id="targetTrailValue" aria-label="Target trailing points" v-model="targetTrailValue"
+                @wheel.prevent="(e) => handleFormInputMouseScroll(e, { type: 'targetTrail' })" />
+              <span class="input-group-text">Points</span>
+            </div>
+          </div>
+
+          <div v-if="isServerManaged" class="col-12 col-md-4 col-lg-3 mt-md-1 mt-lg-2">
+            <label for="useUiTriggers" class="form-label mb-0 small">SL/Target Monitor</label>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="useUiTriggers" v-model="useUiTriggers" />
+              <label class="form-check-label small" for="useUiTriggers">
+                {{ useUiTriggers ? 'This tab (UI)' : 'Server' }}
+              </label>
+            </div>
+            <small class="text-muted">
+              UI monitoring needs this tab open and fresh quotes; changing this switches armed rules too.
+            </small>
+          </div>
+
           <!-- 1 Click Keys -->
           <div class="d-none d-md-block col-6 col-md-4 col-lg-2 mt-md-1 mt-lg-2">
             <label for="enableHotKeys" class="form-label mb-0 small">1 Click Keys</label>
@@ -475,7 +513,7 @@
 
               <p class="text-warning my-2" role="alert">
                 Stop-loss and target rules are virtual, not protective orders at the exchange.
-                Monitoring is managed by the server; leaving this page open is not required.
+                {{ useUiTriggers ? 'UI monitoring requires this tab to remain open and receive fresh prices.' : 'Server monitoring continues when this page is closed.' }}
                 Monitoring or exits can fail if the monitor, market-data feed, network or broker is unavailable.
                 An exit order may not fill; verify the position with Flattrade.
               </p>
@@ -593,7 +631,7 @@ import PnlComponent from '@/components/PnlComponent.vue';
 // Global State
 import {
   selectedCallStrike, selectedPutStrike, selectedMasterSymbol, shoonyaPositionBook, flatTradePositionBook, selectedBroker, selectedBrokerName, selectedExchange, selectedProductType,
-  accountRefreshing, accountRefreshedAt, accountRefreshHandler, selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
+  accountRefreshing, accountRefreshedAt, accountRefreshHandler, selectedQuantity, enableStoploss, enableTarget, stoplossValue, targetValue, enableTrailingStoploss, enableTargetTrail, targetTrailValue, useUiTriggers, selectedOrderType, limitPrice, selectedFlattradePositionsSet, selectedShoonyaPositionsSet, enableHotKeys, exchangeSymbols, selectedExpiry, selectedStrike, callStrikes, putStrikes, allSymbolsData,
   currentTime,
   showLTPRangeBar,
   showOHLCValues,
@@ -628,7 +666,7 @@ import {
   putClosePrice,
   wsConnectionState, productionAccountError, flattradePositionsStale,
   flattradePositionsLastUpdatedAt, lastMarketDataAt, brokerStreamHealth,
-  masterPercentChange, brokerMessage, systemNotices,
+  masterPercentChange, brokerMessage, systemNotices, riskRules, reconciliationRequired, riskSyncAvailable,
 } from '@/stores/globalStore'
 
 
@@ -643,6 +681,7 @@ import { closeAllPositions, cancelPendingOrders, closeSelectedPositions, closePo
 
 // Risk Management Composables
 import { checkStoplossesAndTargets, setStoploss, removeStoploss, increaseStoploss, decreaseStoploss, setTarget, removeTarget, increaseTarget, decreaseTarget, setStoplossPrice, setTargetPrice, toggleTargetTrail, syncRiskRules } from '@/composables/useRiskManagement'
+import { checkUiRiskTriggers } from '@/composables/useUiRiskTriggers'
 
 // Keyboard Shortcuts Composables
 import { handleHotKeys } from '@/composables/useKeyboardShortcuts'
@@ -707,7 +746,7 @@ const staleDismissed = ref(false);
 const lotsText = '1 to 10 contract lots';
 const serverManagedNotice = computed(() =>
   `Server-managed orders place live NSE/BSE index derivatives trades (${lotsText} each). `
-  + 'Virtual stop-loss and target rules are monitored by the server, not the exchange. '
+  + `Virtual stop-loss and target rules are monitored by the ${useUiTriggers.value ? 'browser UI' : 'server'}, not the exchange. `
   + 'If protection toggles are off, entries have no automatic stop-loss or target. No daily loss limit is configured. '
   + 'Triggered exits place live limit orders. Verify fills with Flattrade.')
 const streamNotice = computed(() =>
@@ -716,9 +755,6 @@ const streamNotice = computed(() =>
     ? `Broker stream ${brokerStreamHealth.value.connectionState}; browser connection ${wsConnectionState.value}; `
       + `market data is ${marketDataStale.value ? 'stale or unavailable' : 'current'}.`
     : null)
-watch([serverManagedNotice, streamNotice], () => {
-  systemNotices.value = [isServerManaged ? serverManagedNotice.value : null, streamNotice.value].filter(Boolean)
-}, { immediate: true })
 const formatPercent = (value) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 const marketDataStale = computed(
   () => !lastMarketDataAt.value || currentTime.value - lastMarketDataAt.value > 30_000
@@ -728,6 +764,37 @@ const positionsStale = computed(
     !flattradePositionsLastUpdatedAt.value ||
     currentTime.value - flattradePositionsLastUpdatedAt.value > 120_000
 )
+const riskNotices = computed(() => {
+  const openSymbols = new Set(
+    [...flatTradePositionBook.value, ...shoonyaPositionBook.value]
+      .filter((position) => Number(position.netqty ?? position.netQty) !== 0)
+      .map((position) => position.tsym)
+  )
+  const reconciliation = Object.entries(reconciliationRequired.value)
+    .filter(([tsym]) => openSymbols.has(tsym))
+    .map(([tsym, status]) => `${tsym}: ${status.message || 'protection requires reconciliation'}`)
+  const outcomes = Object.entries(riskRules.value)
+    .filter(([tsym, rule]) => openSymbols.has(tsym) && rule.status !== 'armed' && rule.message)
+    .filter(([tsym]) => !reconciliationRequired.value[tsym])
+    .map(([tsym, rule]) => `${tsym}: ${rule.message}`)
+  const unavailable = isServerManaged && openSymbols.size && !riskSyncAvailable.value
+    ? ['Risk rules could not be loaded; verify each open position with Flattrade.']
+    : []
+  const unprotected = isServerManaged && riskSyncAvailable.value
+    ? [...openSymbols]
+      .filter((tsym) => !reconciliationRequired.value[tsym] && riskRules.value[tsym]?.status !== 'armed')
+      .filter((tsym) => !riskRules.value[tsym]?.message)
+      .map((tsym) => `${tsym}: no active stop-loss/target rule.`)
+    : []
+  return [...reconciliation, ...outcomes, ...unavailable, ...unprotected]
+})
+watch([serverManagedNotice, streamNotice, riskNotices], () => {
+  systemNotices.value = [
+    isServerManaged ? serverManagedNotice.value : null,
+    streamNotice.value,
+    ...riskNotices.value
+  ].filter(Boolean)
+}, { immediate: true })
 let timer;
 let positionCheckInterval;
 let positionRefreshInterval;
@@ -863,6 +930,7 @@ onMounted(async () => {
   await syncRiskRules();
   positionCheckInterval = setInterval(() => {
     checkStoplossesAndTargets();
+    void checkUiRiskTriggers();
   }, 1000);
   positionRefreshInterval = setInterval(refreshFlattradePositions, 60_000);
   accountRefreshInterval = setInterval(refreshAccount, 5000);

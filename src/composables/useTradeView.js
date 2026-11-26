@@ -86,7 +86,8 @@ import {
   reconnectTimeout,
   wsConnectionState,
   stoplossValue,
-  targetValue
+  targetValue,
+  targetTrailValue
 } from '@/stores/globalStore'
 
 
@@ -939,5 +940,13 @@ export const handleFormInputMouseScroll = (event, options) => {
         targetValue.value = newTarget // This will automatically update localStorage
       }
       break
+
+    case 'targetTrail': {
+      const newTargetTrail = Number(targetTrailValue.value) + direction
+      if (newTargetTrail >= 0) {
+        targetTrailValue.value = newTargetTrail
+      }
+      break
+    }
   }
 }

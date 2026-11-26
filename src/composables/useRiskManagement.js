@@ -1,3 +1,4 @@
+import { watch } from 'vue'
 import { usesServerManagedAccount } from '@/config/profile'
 import {
   stoplossValue,
@@ -15,14 +16,15 @@ import {
   riskSyncAvailable,
   flatTradePositionBook,
   shoonyaPositionBook,
+  useUiTriggers,
   toastMessage,
   showToast
 } from '@/stores/globalStore'
 import { fetchRiskRules, createDefaultRiskRule, createManualRiskRule, patchRiskRule, deleteRiskRule } from '@/api/riskRules'
 import { logRequestError } from '@/api/requestError'
 
-// Stop-loss, target and trailing rules live on the server (API + WebSocket service), which
-// watches prices and places the exit. This module only edits rules and mirrors them for display.
+// The API owns all protection rules and broker exits. Prices may be monitored by its
+// WebSocket service or by the active browser tab; this module edits rules and mirrors them.
 
 const pendingDefaultProtection = new Set()
 const armingDefaultProtection = new Set()
@@ -30,6 +32,7 @@ const announcedOutcomes = new Set()
 const OUTCOME_WINDOW_MS = 5 * 60 * 1000
 let saveQueue = Promise.resolve()
 let pendingSaves = 0
+let monitorPreferenceApplied = false
 
 const notify = (message) => {
   toastMessage.value = message
@@ -41,7 +44,7 @@ const armedRule = (tsym) => {
   const rule = riskRules.value[tsym]
   return rule?.status === 'armed' && !reconciliationRequired.value[tsym] ? rule : null
 }
-export const currentMonitor = () => 'server'
+export const currentMonitor = () => useUiTriggers.value ? 'ui' : 'server'
 const round = (value) => Number(value.toFixed(2))
 
 export const getArmedRule = armedRule
@@ -87,6 +90,10 @@ export const syncRiskRules = async () => {
     reconciliationRequired.value = Object.fromEntries((data.reconciliation ?? []).map((item) => [item.tsym, item]))
     riskSyncAvailable.value = true
     syncRiskMirrors()
+    if (!monitorPreferenceApplied) {
+      monitorPreferenceApplied = true
+      queueMicrotask(switchArmedMonitors)
+    }
   } catch (error) {
     riskSyncAvailable.value = false
     logRequestError('Unable to load stop-loss and target rules', error)
@@ -136,6 +143,17 @@ export const updateRule = (position, fields, deltas = {}) => {
   enqueue(async () => keepSaved({ ...next, ...(await patchRiskRule(tsym, { ...fields, ...deltas })) }))
   return true
 }
+
+const switchArmedMonitors = () => {
+  const monitor = currentMonitor()
+  for (const position of allPositions()) {
+    const rule = riskRules.value[position.tsym]
+    if (rule?.status === 'armed' && rule.monitor !== monitor) {
+      updateRule(position, { monitor })
+    }
+  }
+}
+watch(useUiTriggers, switchArmedMonitors)
 
 export const dropRule = (tsym) => {
   console.log(`[risk] removing rule ${tsym}`)
@@ -318,9 +336,9 @@ export const checkStoplossesAndTargets = async () => {
       const rule = await createDefaultRiskRule(tsym, {
         stopPoints: enableStoploss.value ? Number(stoplossValue.value) : null,
         targetPoints: enableTarget.value ? Number(targetValue.value) : null,
-        trailingStop: false,
-        targetTrailing: false,
-        trailPoints: null,
+        trailingStop: enableTrailingStoploss.value,
+        targetTrailing: enableTargetTrail.value,
+        trailPoints: enableTargetTrail.value ? Number(targetTrailValue.value) : null,
         monitor: currentMonitor()
       })
       keepSaved(rule)
