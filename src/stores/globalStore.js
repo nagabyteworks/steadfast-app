@@ -144,6 +144,7 @@ export const riskRules = ref({})
 export const reconciliationRequired = ref({})
 export const riskSyncAvailable = ref(false)
 export const reconciliationStatus = ref(null)
+export const lotRiskRules = useLocalStorage('lotRiskRules', {})
 
 // Trailing stop-loss and target trailing are alternatives. Target trailing needs both the
 // predefined stop-loss and target, so enabling it switches them on and disabling either

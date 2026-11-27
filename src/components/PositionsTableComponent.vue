@@ -21,8 +21,17 @@
             </thead>
             <tbody>
                 <template v-if="sortedPositions.length > 0">
-                    <tr v-for="position in sortedPositions" :key="position.tsym">
+                    <template v-for="position in sortedPositions" :key="position.tsym">
+                    <tr>
                         <td class="position-relative">
+                            <button v-if="lotPositionsFor(position).length"
+                                type="button"
+                                class="btn btn-link btn-xs text-white p-0 me-1"
+                                :aria-expanded="expandedPositionSymbols.has(position.tsym)"
+                                :aria-label="expandedPositionSymbols.has(position.tsym) ? 'Collapse lots' : 'Expand lots'"
+                                @click="toggleExpandedPosition(position.tsym)">
+                                {{ expandedPositionSymbols.has(position.tsym) ? '▼' : '▶' }}
+                            </button>
                             <label
                                 class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center">
                                 <input type="checkbox" :id="'position-' + position.tsym" :value="position.tsym"
@@ -153,6 +162,46 @@
                             </button>
                         </td>
                     </tr>
+                    <tr v-for="lot in (expandedPositionSymbols.has(position.tsym) ? lotPositionsFor(position) : [])"
+                        :key="lot.lotId"
+                        class="lot-position-row">
+                        <td></td>
+                        <td class="ps-4">
+                            {{ lot.legacy ? 'Legacy aggregated lot' : 'Lot ' + lotNumber(lot, position) }}
+                            <small v-if="lot.entryOrderId" class="d-block text-secondary">{{ lot.entryOrderId }}</small>
+                        </td>
+                        <td :class="lot.remainingQuantity > 0 ? 'text-success' : 'text-secondary'">{{ lot.remainingQuantity }}</td>
+                        <td :class="{ 'text-success': lot.side === 'BUY', 'text-danger': lot.side === 'SELL' }">{{ lot.side }}</td>
+                        <td>
+                            <button v-if="lotRiskRules[lot.lotId]?.stopLoss == null"
+                                class="btn btn-outline btn-xs" @click="$emit('set-lot-stoploss', lot)">Set SL</button>
+                            <EditableRiskValue v-else :value="lotRiskRules[lot.lotId].stopLoss"
+                                @commit="(price) => $emit('edit-lot-stoploss', lot, price)" />
+                            <button v-if="lotRiskRules[lot.lotId]?.trailingStopLoss != null"
+                                class="btn btn-outline btn-xs ms-1"
+                                @click="$emit('edit-lot-stoploss', lot, lotRiskRules[lot.lotId].trailingStopLoss)">TSL</button>
+                        </td>
+                        <td>{{ formatPrice(positionLTPs[position.tsym] ?? position.lp) }}</td>
+                        <td>
+                            <button v-if="lotRiskRules[lot.lotId]?.target == null"
+                                class="btn btn-outline btn-xs" @click="$emit('set-lot-target', lot)">Set Target</button>
+                            <EditableRiskValue v-else :value="lotRiskRules[lot.lotId].target"
+                                @commit="(price) => $emit('edit-lot-target', lot, price)" />
+                        </td>
+                        <td>{{ formatProductType(position.prd) }}</td>
+                        <td>{{ formatPrice(lot.entryAveragePrice) }}</td>
+                        <td>{{ formatPrice(lot.exitAveragePrice) }}</td>
+                        <td :class="lot.realizedPnl > 0 ? 'text-success' : lot.realizedPnl < 0 ? 'text-danger' : null">{{ formatPrice(lot.realizedPnl) }}</td>
+                        <td :class="lot.unrealizedPnl > 0 ? 'text-success' : lot.unrealizedPnl < 0 ? 'text-danger' : null">{{ formatPrice(lot.unrealizedPnl) }}</td>
+                        <td>
+                            <button v-if="lot.remainingQuantity > 0"
+                                class="btn btn-outline-danger btn-xs"
+                                @click="$emit('exit-lot', lot)">
+                                Exit Lot
+                            </button>
+                        </td>
+                    </tr>
+                    </template>
                 </template>
                 <tr v-else>
                     <td colspan="14" class="text-center">
@@ -305,6 +354,11 @@ defineEmits([
     'edit-target',
     'toggle-target-trail',
     'exit-position',
+    'set-lot-stoploss',
+    'set-lot-target',
+    'edit-lot-stoploss',
+    'edit-lot-target',
+    'exit-lot',
 ]);
 
 
@@ -312,8 +366,9 @@ defineEmits([
 import { formatTradingSymbol, formatPrice } from '@/composables/useFormatters';
 
 // Global State
-import { positionLTPs, positionPercentChanges, stoplosses, targets, trailingStoplosses, riskRules } from '@/stores/globalStore'
+import { positionLTPs, positionPercentChanges, stoplosses, targets, trailingStoplosses, riskRules, lotRiskRules } from '@/stores/globalStore'
 import EditableRiskValue from './EditableRiskValue.vue'
+import { lotPositionsBySymbol, expandedPositionSymbols, toggleExpandedPosition } from '@/composables/useLotPositions'
 const targetTrailing = computed(() =>
     Object.fromEntries(Object.entries(riskRules.value).map(([tsym, rule]) => [tsym, rule.status === 'armed' && rule.mode === 'target_trail'])))
 
@@ -358,6 +413,12 @@ function handleCheckboxChange(event, tsym) {
     }
     return updatedSet;
 }
+
+const lotPositionsFor = (position) => lotPositionsBySymbol.value[position.tsym] || []
+const lotNumber = (lot, position) => {
+    const lots = lotPositionsFor(position)
+    return Math.max(1, lots.findIndex((item) => item.lotId === lot.lotId) + 1)
+}
 </script>
 
 <style scoped>
@@ -365,5 +426,13 @@ function handleCheckboxChange(event, tsym) {
     padding: 0 0.35rem;
     font-size: 0.7rem;
     line-height: 1.3;
+}
+
+.lot-position-row {
+    --bs-table-bg: rgba(255, 255, 255, 0.035);
+}
+
+.lot-position-row td {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 </style>

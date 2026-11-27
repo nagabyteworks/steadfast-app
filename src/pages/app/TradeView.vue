@@ -511,7 +511,9 @@
                 @set-stoploss="(position, type) => setStoploss(position, type)" @remove-stoploss="removeStoploss"
                 @increase-stoploss="increaseStoploss" @decrease-stoploss="decreaseStoploss" @set-target="setTarget"
                 @remove-target="removeTarget" @increase-target="increaseTarget" @decrease-target="decreaseTarget"
-                @edit-stoploss="setStoplossPrice" @edit-target="setTargetPrice" @toggle-target-trail="toggleTargetTrail" @exit-position="closePosition" />
+                @edit-stoploss="setStoplossPrice" @edit-target="setTargetPrice" @toggle-target-trail="toggleTargetTrail" @exit-position="closePosition"
+                @set-lot-stoploss="setLotStoploss" @set-lot-target="setLotTarget"
+                @edit-lot-stoploss="editLotStoploss" @edit-lot-target="editLotTarget" @exit-lot="exitLot" />
 
               <!-- Shoonya Positions -->
               <PositionsTableComponent v-if="activeFetchFunction === 'fetchShoonyaPositions'"
@@ -521,7 +523,9 @@
                 @set-stoploss="(position, type) => setStoploss(position, type)" @remove-stoploss="removeStoploss"
                 @increase-stoploss="increaseStoploss" @decrease-stoploss="decreaseStoploss" @set-target="setTarget"
                 @remove-target="removeTarget" @increase-target="increaseTarget" @decrease-target="decreaseTarget"
-                @edit-stoploss="setStoplossPrice" @edit-target="setTargetPrice" @toggle-target-trail="toggleTargetTrail" @exit-position="closePosition" />
+                @edit-stoploss="setStoplossPrice" @edit-target="setTargetPrice" @toggle-target-trail="toggleTargetTrail" @exit-position="closePosition"
+                @set-lot-stoploss="setLotStoploss" @set-lot-target="setLotTarget"
+                @edit-lot-stoploss="editLotStoploss" @edit-lot-target="editLotTarget" @exit-lot="exitLot" />
 
               <p class="text-warning my-2" role="alert">
                 Stop-loss and target rules are virtual, not protective orders at the exchange.
@@ -681,6 +685,7 @@ import {
   flattradePositionsLastUpdatedAt, lastMarketDataAt, brokerStreamHealth,
   masterPercentChange, brokerMessage, systemNotices, riskRules, reconciliationRequired, riskSyncAvailable,
   reconciliationStatus,
+  lotRiskRules,
 } from '@/stores/globalStore'
 
 
@@ -878,6 +883,54 @@ watch([selectedBroker, brokerStatus], () => {
 });
 
 let accountRefreshInterval;
+
+const setLotStoploss = (lot) => {
+  const entry = Number(lot.entryAveragePrice)
+  const points = Number(stoplossValue.value)
+  if (!Number.isFinite(entry) || !Number.isFinite(points) || points <= 0) return
+  const sideSign = lot.side === 'BUY' ? 1 : -1
+  lotRiskRules.value = {
+    ...lotRiskRules.value,
+    [lot.lotId]: {
+      ...(lotRiskRules.value[lot.lotId] || {}),
+      stopLoss: Number((entry - sideSign * points).toFixed(2)),
+    },
+  }
+}
+const setLotTarget = (lot) => {
+  const entry = Number(lot.entryAveragePrice)
+  const points = Number(targetValue.value)
+  if (!Number.isFinite(entry) || !Number.isFinite(points) || points <= 0) return
+  const sideSign = lot.side === 'BUY' ? 1 : -1
+  lotRiskRules.value = {
+    ...lotRiskRules.value,
+    [lot.lotId]: {
+      ...(lotRiskRules.value[lot.lotId] || {}),
+      target: Number((entry + sideSign * points).toFixed(2)),
+    },
+  }
+}
+const editLotStoploss = (lot, price) => {
+  lotRiskRules.value = {
+    ...lotRiskRules.value,
+    [lot.lotId]: { ...(lotRiskRules.value[lot.lotId] || {}), stopLoss: Number(price) },
+  }
+}
+const editLotTarget = (lot, price) => {
+  lotRiskRules.value = {
+    ...lotRiskRules.value,
+    [lot.lotId]: { ...(lotRiskRules.value[lot.lotId] || {}), target: Number(price) },
+  }
+}
+const exitLot = (lot) => {
+  const position = [...flatTradePositionBook.value, ...shoonyaPositionBook.value]
+    .find((item) => item.tsym === lot.symbol)
+  if (!position) return
+  closePosition({
+    ...position,
+    netqty: lot.side === 'BUY' ? lot.remainingQuantity : -lot.remainingQuantity,
+  })
+}
 
 // Re-validates the Flattrade session and reloads funds, orders and positions.
 const refreshAccount = async () => {
