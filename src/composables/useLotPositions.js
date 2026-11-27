@@ -6,8 +6,25 @@ import {
   shoonyaTradeBook,
   positionLTPs,
   selectedBroker,
-  quantities
+  quantities,
+  lotRiskRules
 } from '@/stores/globalStore'
+import { fetchLots, syncLots, triggerLot, updateLotProtection } from '@/api/lots'
+
+export const brokerLots = ref([])
+
+export const syncLotLedger = async () => {
+  try {
+    const data = await syncLots()
+    brokerLots.value = data.lots || []
+  } catch {
+    try {
+      brokerLots.value = (await fetchLots()).lots || []
+    } catch {
+      brokerLots.value = []
+    }
+  }
+}
 
 export const expandedPositionSymbols = ref(
   new Set(JSON.parse(localStorage.getItem('expandedPositionSymbols') || '[]'))
@@ -174,6 +191,18 @@ export const lotPositionsBySymbol = computed(() => {
     : shoonyaTradeBook.value
   return Object.fromEntries(positions.map((position) => {
     const symbol = position.tsym
+    const persisted = brokerLots.value.filter((lot) => lot.symbol === symbol)
+    if (persisted.length) {
+      const ltp = Number(positionLTPs.value[symbol] ?? position.lp)
+      return [symbol, persisted.map((lot) => ({
+        ...lot,
+        side: lot.side === 'long' ? 'BUY' : lot.side === 'short' ? 'SELL' : lot.side,
+        unrealizedPnl: Number.isFinite(ltp) && lot.entryAveragePrice != null
+          ? (ltp - Number(lot.entryAveragePrice)) * lot.remainingQuantity *
+            (lot.side === 'long' ? 1 : -1)
+          : 0,
+      }))]
+    }
     const master = Object.keys(quantities.value).find((key) =>
       symbol?.startsWith(key))
     const lotSize = quantities.value[master]?.lotSize
@@ -185,3 +214,31 @@ export const lotPositionsBySymbol = computed(() => {
     )]
   }))
 })
+
+const lotTriggerInFlight = new Set()
+export const checkLotProtectionTriggers = async () => {
+  for (const lot of brokerLots.value) {
+    if (lot.status === 'EXIT_PENDING' || lot.status === 'EXIT_PARTIALLY_FILLED' ||
+        lot.status === 'EXIT_COMPLETED' || lot.remainingQuantity <= 0 ||
+        !lot.protectionEnabled) continue
+    const ltp = Number(positionLTPs.value[lot.symbol])
+    if (!Number.isFinite(ltp) || ltp <= 0 || lotTriggerInFlight.has(lot.lotId)) continue
+    const local = lotRiskRules.value[lot.lotId] || {}
+    const stopLoss = local.stopLoss ?? lot.stopLoss
+    const target = local.target ?? lot.target
+    const sign = lot.side === 'long' ? 1 : -1
+    let reason = null
+    if (stopLoss != null && sign * (ltp - Number(stopLoss)) <= 0) reason = 'Stop-loss'
+    else if (target != null && sign * (ltp - Number(target)) >= 0) reason = 'Target'
+    if (!reason) continue
+    lotTriggerInFlight.add(lot.lotId)
+    try {
+      await triggerLot(lot.lotId, { reason, ltp })
+      await syncLotLedger()
+    } catch {
+      // Reconciliation owns unresolved and rejected submissions.
+    } finally {
+      lotTriggerInFlight.delete(lot.lotId)
+    }
+  }
+}

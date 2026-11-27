@@ -686,6 +686,7 @@ import {
   masterPercentChange, brokerMessage, systemNotices, riskRules, reconciliationRequired, riskSyncAvailable,
   reconciliationStatus,
   lotRiskRules,
+  positionLTPs,
 } from '@/stores/globalStore'
 
 
@@ -697,6 +698,8 @@ import { productTypes, getProductTypeValue, updateAvailableQuantities, orderType
 
 // Order Management Composables
 import { closeAllPositions, cancelPendingOrders, closeSelectedPositions, closePosition } from '@/composables/useOrderManagement'
+import { syncLotLedger, checkLotProtectionTriggers } from '@/composables/useLotPositions'
+import { updateLotProtection, exitLot as submitLotExit } from '@/api/lots'
 import { createPairOrderFlow } from '@/composables/usePairOrderFlow'
 
 // Risk Management Composables
@@ -896,6 +899,10 @@ const setLotStoploss = (lot) => {
       stopLoss: Number((entry - sideSign * points).toFixed(2)),
     },
   }
+  void updateLotProtection(lot.lotId, {
+    stopLoss: Number((entry - sideSign * points).toFixed(2)),
+    protectionEnabled: true,
+  }).catch(() => {})
 }
 const setLotTarget = (lot) => {
   const entry = Number(lot.entryAveragePrice)
@@ -909,27 +916,33 @@ const setLotTarget = (lot) => {
       target: Number((entry + sideSign * points).toFixed(2)),
     },
   }
+  void updateLotProtection(lot.lotId, {
+    target: Number((entry + sideSign * points).toFixed(2)),
+    protectionEnabled: true,
+  }).catch(() => {})
 }
 const editLotStoploss = (lot, price) => {
   lotRiskRules.value = {
     ...lotRiskRules.value,
     [lot.lotId]: { ...(lotRiskRules.value[lot.lotId] || {}), stopLoss: Number(price) },
   }
+  void updateLotProtection(lot.lotId, { stopLoss: Number(price) }).catch(() => {})
 }
 const editLotTarget = (lot, price) => {
   lotRiskRules.value = {
     ...lotRiskRules.value,
     [lot.lotId]: { ...(lotRiskRules.value[lot.lotId] || {}), target: Number(price) },
   }
+  void updateLotProtection(lot.lotId, { target: Number(price) }).catch(() => {})
 }
 const exitLot = (lot) => {
-  const position = [...flatTradePositionBook.value, ...shoonyaPositionBook.value]
-    .find((item) => item.tsym === lot.symbol)
-  if (!position) return
-  closePosition({
-    ...position,
-    netqty: lot.side === 'BUY' ? lot.remainingQuantity : -lot.remainingQuantity,
-  })
+  const ltp = Number(positionLTPs.value[lot.symbol])
+  void submitLotExit(lot.lotId, Number.isFinite(ltp) && ltp > 0 ? ltp : null)
+    .then(async () => { await syncLotLedger() })
+    .catch((error) => {
+      toastMessage.value = error.response?.data?.message || 'Unable to exit the lot'
+      showToast.value = true
+    })
 }
 
 // Re-validates the Flattrade session and reloads funds, orders and positions.
@@ -940,6 +953,8 @@ const refreshAccount = async () => {
     await checkAllTokens();
     if (selectedBroker.value?.brokerName) {
       await Promise.all([fetchFundLimit(), updateOrdersAndPositions(), syncRiskRules()]);
+      await syncLotLedger()
+      await checkLotProtectionTriggers()
     }
     accountRefreshedAt.value = Date.now();
   } catch (error) {
@@ -953,6 +968,7 @@ const refreshAccount = async () => {
 onMounted(async () => {
 
   await checkAllTokens();
+  await syncLotLedger();
 
   const storedBroker = localStorage.getItem('selectedBroker');
   if (storedBroker) {

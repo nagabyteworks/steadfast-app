@@ -205,6 +205,22 @@ it('rejects disabled protection, flat positions and invalid points', () => {
   expect(setTarget(position)).toBe(false)
 })
 
+it('can re-add stop-loss and target after both levels were removed', async () => {
+  positionLTPs.value = { NIFTYCE: 100 }
+  expect(await setStoploss(position, 'static')).toBe(true)
+  expect(await setTarget(position)).toBe(true)
+  setStoplossPrice(position, null)
+  setTargetPrice(position, null)
+  expect(riskRules.value.NIFTYCE).toBeUndefined()
+
+  expect(await setStoploss(position, 'static')).toBe(true)
+  expect(await setTarget(position)).toBe(true)
+  expect(riskRules.value.NIFTYCE).toMatchObject({
+    slPrice: 90,
+    targetPrice: 120,
+  })
+})
+
 it('uses the confirmed first fill rather than LTP or average for manual protection', async () => {
   positionLTPs.value = { NIFTYCE: 200 }
   const response = armed({ entry: 150, slPrice: 140, targetPrice: null })

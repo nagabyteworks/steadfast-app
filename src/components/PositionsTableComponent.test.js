@@ -16,6 +16,7 @@ import {
   riskRules,
   selectedBroker
 } from '@/stores/globalStore'
+import { expandedPositionSymbols } from '@/composables/useLotPositions'
 
 const originalState = {
   positions: flatTradePositionBook.value,
@@ -33,6 +34,8 @@ afterEach(() => {
   reconciliationRequired.value = originalState.reconciliation
   riskRules.value = originalState.rules
   selectedBroker.value = originalState.broker
+  expandedPositionSymbols.value = new Set()
+  localStorage.removeItem('expandedPositionSymbols')
 })
 
 it('keeps reconciliation details out of the positions table', () => {
@@ -78,4 +81,9 @@ it('expands an aggregated position into independent lot rows', async () => {
   expect(wrapper.text()).toContain('Lot 2')
   expect(wrapper.text()).toContain('Lot 3')
   expect(wrapper.findAll('.lot-position-row')).toHaveLength(3)
+
+  await wrapper.find('[aria-label="Collapse lots"]').trigger('click')
+
+  expect(wrapper.text()).not.toContain('Lot 1')
+  expect(wrapper.findAll('.lot-position-row')).toHaveLength(0)
 })

@@ -23,17 +23,17 @@
                 <template v-if="sortedPositions.length > 0">
                     <template v-for="position in sortedPositions" :key="position.tsym">
                     <tr>
-                        <td class="position-relative">
+                        <td>
                             <button v-if="lotPositionsFor(position).length"
                                 type="button"
-                                class="btn btn-link btn-xs text-white p-0 me-1"
+                                class="btn btn-link btn-xs text-white p-0 me-1 lot-expand-toggle"
+                                style="position: relative; z-index: 3;"
                                 :aria-expanded="expandedPositionSymbols.has(position.tsym)"
                                 :aria-label="expandedPositionSymbols.has(position.tsym) ? 'Collapse lots' : 'Expand lots'"
                                 @click="toggleExpandedPosition(position.tsym)">
                                 {{ expandedPositionSymbols.has(position.tsym) ? '▼' : '▶' }}
                             </button>
-                            <label
-                                class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center">
+                            <label class="d-inline-flex justify-content-center align-items-center">
                                 <input type="checkbox" :id="'position-' + position.tsym" :value="position.tsym"
                                     :checked="safeSelectedPositionsSet.has(position.tsym)"
                                     :disabled="position.netqty == 0"
@@ -218,6 +218,14 @@
             <div v-for="position in sortedPositions" :key="position.tsym" class="list-group-item bg-color">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div>
+                        <button v-if="lotPositionsFor(position).length"
+                            type="button"
+                            class="btn btn-link btn-xs text-white p-0 me-1"
+                            :aria-expanded="expandedPositionSymbols.has(position.tsym)"
+                            :aria-label="expandedPositionSymbols.has(position.tsym) ? 'Collapse lots mobile' : 'Expand lots mobile'"
+                            @click="toggleExpandedPosition(position.tsym)">
+                            {{ expandedPositionSymbols.has(position.tsym) ? '▼' : '▶' }}
+                        </button>
                         <strong>{{ formatTradingSymbol(position.tsym) }}</strong>
                         <span :class="[
                             'badge ms-2',
@@ -252,6 +260,40 @@
                     <span :class="position.rpnl > 0 ? 'text-success' : position.rpnl < 0 ? 'text-danger' : null">
                         Realized: {{ formatPrice(position.rpnl) }}
                     </span>
+                </div>
+
+                <div v-if="expandedPositionSymbols.has(position.tsym)"
+                    class="lot-mobile-list mb-2">
+                    <div v-for="lot in lotPositionsFor(position)" :key="lot.lotId"
+                        class="lot-mobile-row rounded px-2 py-2 mb-1">
+                        <div class="d-flex justify-content-between">
+                            <strong>{{ lot.legacy ? 'Legacy aggregated lot' : 'Lot ' + lotNumber(lot, position) }}</strong>
+                            <span :class="lot.remainingQuantity > 0 ? 'text-success' : 'text-secondary'">
+                                Qty {{ lot.remainingQuantity }}
+                            </span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 small text-muted mt-1">
+                            <span>Side: {{ lot.side }}</span>
+                            <span>B.Avg: {{ formatPrice(lot.entryAveragePrice) }}</span>
+                            <span>S.Avg: {{ formatPrice(lot.exitAveragePrice) }}</span>
+                            <span>R.P&amp;L: {{ formatPrice(lot.realizedPnl) }}</span>
+                            <span>U.P&amp;L: {{ formatPrice(lot.unrealizedPnl) }}</span>
+                        </div>
+                        <div v-if="lot.remainingQuantity > 0" class="d-flex gap-1 mt-2">
+                            <button class="btn btn-outline btn-xs"
+                                v-if="lotRiskRules[lot.lotId]?.stopLoss == null"
+                                @click="$emit('set-lot-stoploss', lot)">Set SL</button>
+                            <EditableRiskValue v-else :value="lotRiskRules[lot.lotId].stopLoss"
+                                @commit="(price) => $emit('edit-lot-stoploss', lot, price)" />
+                            <button class="btn btn-outline btn-xs"
+                                v-if="lotRiskRules[lot.lotId]?.target == null"
+                                @click="$emit('set-lot-target', lot)">Set Target</button>
+                            <EditableRiskValue v-else :value="lotRiskRules[lot.lotId].target"
+                                @commit="(price) => $emit('edit-lot-target', lot, price)" />
+                            <button class="btn btn-outline-danger btn-xs ms-auto"
+                                @click="$emit('exit-lot', lot)">Exit Lot</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- SL, TSL & Target -->
@@ -374,7 +416,27 @@ const targetTrailing = computed(() =>
 
 
 const sortedPositions = computed(() => {
-    return [...positionsWithCalculatedProfit.value].sort((a, b) => {
+    return [...positionsWithCalculatedProfit.value].map((position) => {
+        const lots = lotPositionsFor(position)
+        if (!lots.length) return position
+        const remainingQty = lots.reduce((sum, lot) => sum + Number(lot.remainingQuantity || 0), 0)
+        const buyValue = lots.reduce((sum, lot) => sum +
+            Number(lot.entryAveragePrice || 0) * Number(lot.remainingQuantity || 0), 0)
+        const sellLots = lots.filter((lot) => Number(lot.exitAveragePrice) > 0)
+        const sellQty = sellLots.reduce((sum, lot) => sum +
+            (Number(lot.quantity || 0) - Number(lot.remainingQuantity || 0)), 0)
+        const sellValue = sellLots.reduce((sum, lot) => sum +
+            Number(lot.exitAveragePrice || 0) *
+            (Number(lot.quantity || 0) - Number(lot.remainingQuantity || 0)), 0)
+        return {
+            ...position,
+            netqty: remainingQty * (lots[0]?.side === 'SELL' ? -1 : 1),
+            totbuyavgprc: remainingQty ? (buyValue / remainingQty).toFixed(2) : position.totbuyavgprc,
+            totsellavgprc: sellQty ? (sellValue / sellQty).toFixed(2) : position.totsellavgprc,
+            rpnl: lots.reduce((sum, lot) => sum + Number(lot.realizedPnl || 0), 0),
+            calculatedUrmtom: lots.reduce((sum, lot) => sum + Number(lot.unrealizedPnl || 0), 0)
+        }
+    }).sort((a, b) => {
         // First, sort by open/closed status
         if (Number(a.netqty) !== 0 && Number(b.netqty) === 0) return -1
         if (Number(a.netqty) === 0 && Number(b.netqty) !== 0) return 1
@@ -434,5 +496,14 @@ const lotNumber = (lot, position) => {
 
 .lot-position-row td {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lot-expand-toggle {
+    min-width: 1.25rem;
+}
+
+.lot-mobile-row {
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 </style>
